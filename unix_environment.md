@@ -1,5 +1,13 @@
 # 本文介绍unix环境编程相关知识
 
+> cpu工作原理,自动取址执行-->管理cpu就是设置PC值-->多道程序，交替执行 --> 并发 -->  如何实现并发？（切换PC、记录返回地址) --> PCB记录信息（切出去时程序执行的上下文：进程标识符、处理机的信息（通用寄存器，指令计数器，PSW，用户的栈指针、进程调度信息（进程状态，进程的优先级...)、进程控制信息（进程同步和通信机制，链接指针...)
+>
+> 中断->将寄存器、PC、程序状态字、等压栈 --> 跳转到中断向量所指示的地址
+>
+> 进程：中断->保存上下文到PCB--> 找到目标PCB  --> 恢复PCB中信息 --> 跳转执行
+>
+> 线程：TCB
+
 ## 一 .线程  
 
 每个线程都包含有表示执行环境所需的信息，其中包括：**线程ID，一组寄存器值，栈，调度优先级和策略，信号屏蔽字，errno变量，线程私有数据**；一个进程的所有信息，对该进程的所有线程都是共享的，包括**可执行程序的代码，程序的全局内存和堆内存，栈以及文件描述符号**；
@@ -87,7 +95,30 @@
 
 ### 2.线程同步
 
-#### a.互斥量
+#### a.互斥量mutex
+
+对互斥量加锁以后，其他任何试图再次对互斥量加锁的线程都会被**阻塞**直到当前线程释放该互斥量；互斥量为`pthread_mutex_t`结构体，使用前必须初始化，也可以设置为常量`PTHREAD_MUTEX_INITIALIXZER`
+
+- 互斥量初始化和销毁
+
+  ```c
+  #inlcude <pthread.h>
+  /*
+  	mutex:初始化的互斥量
+  	attr：互斥量的属性
+  */
+  int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *attr);
+  int pthread_mutex_destroy(pthread_mutex_t *mutex);
+  ```
+
+- 互斥量的上锁解锁
+
+  ```c
+  int pthread_mutex_lock(pthread_mutex_t *mutex);				// 上锁，已经被锁则阻塞
+  int pthread_mutex_trylock(pthread_mutex_t *mutex);			// 上锁，不阻塞
+  int pthread_mutex_unlock(pthread_mutex_t *mutex);			// 解锁
+  															// 成功返回0，失败，返回错误编号
+  ```
 
 #### ｂ.死锁
 
