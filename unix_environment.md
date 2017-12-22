@@ -10,15 +10,21 @@
 >
 > 1.并行实体共享一个地址空间和所有可用数据的能力；2.线程更轻，比进程快10~100倍；3.加快程序执行的速度；
 >
-> 线程：每个线程中的内容：程序计数器，寄存器，**堆栈**，状态，
+> 线程：每个线程中的内容：程序计数器，寄存器，**堆**，状态，
 
-## 一 .线程  
+## 一.进程
+
+
+
+## 二.线程  
 
 每个线程都包含有表示执行环境所需的信息，其中包括：**线程ID，一组寄存器值，栈，调度优先级和策略，信号屏蔽字，errno变量，线程私有数据**；一个进程的所有信息，对该进程的所有线程都是共享的，包括**可执行程序的代码，程序的全局内存和堆内存，栈以及文件描述符号**；
 
+> 可以用==`#ifdef _POSIX_THREADS`==在编译时测试系统是否支持线程；
+
 ### 1.线程的生生死死
 
-- 线程ID：用`pthread_t`类型表示，不同的操作系统实现不同，有的是结构体，有的是长整形；*linux中是无符号长整形*；
+- 线程ID：用`pthread_t`类型表示，不同的操作系统实现不同，有的是**`struc`**，有的是**`long int`**；*linux中是无符号长整形*；
 
   ```c
   #include <pthread.h>
@@ -26,7 +32,9 @@
   pthread_t pthread_self(void);								//返回自己的线程id；
   ```
 
-- 线程的创建：
+- 线程的创建：线程创建时并不能保证那个线程会先运行；
+
+  > 进程的创建和终止都能通过`void*`传递的值不止一个，需要注意的是，这个结构体所使用的内存在调用者完成调用以后必须仍然是有效的。可以使用全局结构或者`malloc`函数分配结构
 
   ```c
   #include <pthread.h>
@@ -57,6 +65,7 @@
     ```c
     void pthread_exit(void *rval_ptr);			//终止调用的线程，并返回一个值存放于rval_ptr中
     int pthread_join(pthread_t thread, void **rval_ptr);		//调用线程阻塞，等待指定进程终止，rval_ptr包含返回信息，或终止信息（如目标线程被取消，放置PTHREAD_CANCELED）；如果多个线程同时链接到一个指定线程，结果未定义；
+    // void **rval_ptr; 需要一个指针存放返回信息，这里传入指针的地址；
     ```
 
   - `pthread_cancel()`
@@ -118,14 +127,63 @@
 - 互斥量的上锁解锁
 
   ```c
-  int pthread_mutex_lock(pthread_mutex_t *mutex);				// 上锁，已经被锁则阻塞
-  int pthread_mutex_trylock(pthread_mutex_t *mutex);			// 上锁，不阻塞
+  int pthread_mutex_lock(pthread_mutex_t *mutex);				// 上锁，不成功则阻塞
+  int pthread_mutex_trylock(pthread_mutex_t *mutex);			// 上锁，不成功不阻塞
   int pthread_mutex_unlock(pthread_mutex_t *mutex);			// 解锁
+  int pthread_mutex_timedlock(pthread_mutex_t *restrict mutex,
+                 const struct timespec *restrict tsptr);		// 上锁，阻塞到指定（绝对）时间
   															// 成功返回0，失败，返回错误编号
   ```
 
 #### ｂ.死锁
 
+- 如果一个程序试图对一个互斥量加锁两次，那么它自身就会陷入死锁状态；
+- 如果一个以上的互斥量时，如果允许一个程序一直占有第一个互斥亮并且在试图锁住第二个互斥量时处于阻塞状态，但是拥有第二个互斥量的进程也试图锁住第一个互斥量。**两个线程都试图获取对方占有的资源，就产生了死锁**
+- 避免方式：
+  - 控制加锁顺序
+  - 使用`pthread_mutex_trylock()`，避免进程阻塞；如果加锁不成功，清理资源，过段时间在试；
+
 #### ｃ.读写锁
 
+类似互斥锁，但比互斥更高效；读写锁有三种模式：读模式锁，写模式锁，不加锁；可以有多线程同时占用读锁，但只有一个线程能占用写锁；读写锁类型为：`pthread_rwlock_t`
+
+- 初始化和销毁
+
+  ```c
+  #include <pthread.h>
+  int pthread_rwlock_init(pthread_rwlock_t * lock, const pthread_rwlockattr_t *attr);
+  int pthread_rwlock_destroy(pthread_rwlock_t *relock);
+  ```
+
+- 上锁解锁
+
+  ```c
+  int pthread_rwlock_rdlock(pthread_rwlock_t * lock);		// 上读锁，
+  int pthread_rwlock_wrlock(pthread_rwlock_t * lock);		// 上写锁
+  int pthread_rwlock_unlock(pthread_rwlock_t * lock);		// 解锁
+  int pthread_rwlock_tryrdlock(pthread_rwlock_t * lock);
+  int pthread_rwlock_trywrlock(pthread_rwlock_t * lock);
+  int pthread_rwlock_timedrdlock(pthread_rwlock_t * lock, const struct timespec *tsptr);
+  int pthread_rwlock_timedwrlock(pthread_rwlock_t * lock, const struct timespec *tsptr);
+  ```
+
 #### ｄ.自旋锁
+
+自旋锁与互斥量类似，但是不通过休眠使进程阻塞，而是在获取锁之前一直处于忙等（自旋）阻塞状态；可以用于锁持有时间短，且线程不希望在重新调度上花时间；在锁空闲时立刻获得；
+
+- 初始化和销毁
+
+  ```c
+    int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
+    int pthread_spin_destroy(pthread_spinlock_t *lock);
+  ```
+
+- 上锁解锁
+
+  ```c
+    int pthread_spin_lock(pthread_spinlock_t *lock);
+    int pthread_spin_trylock(pthread_spinlock_t *lock);
+    int pthread_spin_unlock(pthread_spinlock_t *lock);
+  ```
+
+#### e.屏障
