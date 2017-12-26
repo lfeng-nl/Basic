@@ -187,3 +187,13 @@
   ```
 
 #### e.屏障
+
+屏障（barrier）是用户协调多个线程并行执行工作的同步机制；屏障允许每个线程等待，直到所有的合作线程都到达某一点，然后从该点继续执行；
+
+- 初始化和销毁
+
+  ```c
+  int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
+  ```
+
+  ​
