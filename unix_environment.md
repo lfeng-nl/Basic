@@ -14,16 +14,21 @@
 
 ## 一.进程
 
+进程定义：一个其中运行着一个或多个线程的地址空间和这些线程所需的系统资源；
+
+进程有自己的栈空间，用于保存函数中的局部变量和控制函数的调用和返回，进程之间会共享函数程序代码和系统函数库；
+
 ### 1.进程环境
 
 - `main(int argc, char *argv[])`函数：`argc`参数个数，`argv`参数列表`argv[0]`为函数名；
+- 进程表：保存当前进程的所有相关信息，包括PID，进程状态，命令字符串，和其他一些`ps`命令输出的各类信息。
 
 
 - 进程终止：`exit()`先执行清理处理（用户登记的清理函数，IO库的清理和关闭），然后返回内核；`_exit()`和`_Exit()`立即进入内核；`atexit()`登记处理函数，执行时按登记顺序的逆序执行；
 
   > 在`main()`中调用`exit(0)`等价于`return(0)` ；
 
-- 环境表：每个进程都会有一张环境表，全局变量`environ`包含了该指针数组的地址；如需使用则需要声明`extern char **environ;`一般用户可以用`getenv()`和`putenv()`使用特定的环境变量；
+- 环境表：每个进程都会有一张环境表，包含为这个进程建立的环境变量；全局变量`environ`包含了该指针数组的地址；如需使用则需要声明`extern char **environ;`一般用户可以用`getenv()`和`putenv()`使用特定的环境变量；
 
   - `putenv(char *str)` ：传入`name=value`的字符串；
   - `setenv(const char *name, const char *value, int overwrite)` ：overwrite是否重写；
@@ -66,14 +71,78 @@
 
 #### b.进程退出
 
-- 进程有五种退出方式：1、`main`中`return`,2、调用`exit()`，3、掉用`_exit()`， 4，进程最后一个线程中执行`return`语句，5、进程最后一个线程调用`pthread_exit()`;
-- 终止进程的父进程都能通过`wait()`或`waitpid()` 取得其终止状态；
+- 进程有五种退出方式：1、`main`中`return`,2、调用`exit()`，3、调用`_exit()`， 4，进程最后一个线程中执行`return`语句，5、进程最后一个线程调用`pthread_exit()`;
 
-### 3.进程的关系
+- 当进程终止时，内核会向其父进程发送`SIGCHLD`信号，终止进程的父进程都能通过`wait()`或`waitpid()` 取得其终止状态；
 
-### 4.进程间通信
+  ```c
+  pid_t wait(int *status);		// 调用者阻塞，直到有一个子进程终止，如果有僵死子进程也立刻返回；
+  pid_t waitpid(pid_t pid, int *status, int options);		// 等待指定的进程，可以不阻塞等待；
+  int waitid(idtype_t idtype, id_t id, siginfo_t *info, int options);
+  /*
+  	status 为返回状态，可以用<sys/wait.h>中定义的宏来查看具体内容：
+  		WIFEXITED(status):正常终止为真，可以用WEXITSTATUS(status) 获取exit()返回值；
+  		WIFSIGNALED(status):
+  		WIFSTOPPED(status):
+  		WIFCONTINUED(status):
+  */
+  ```
 
-## 二.线程  
+- 当子进程终止退出时，父进程并未对其发出的`SIGCHLD`信号进行适当处理，导致子进程停留在僵死状态等待其父进程为其收尸，这个状态下的子进程就是僵死进程；
+
+#### c.进程的使用
+
+- 竞争：当多个进程都企图对共享数据进行某种处理，而结果又取决于进程运行的顺序时，我们认为发生了竞争条件；
+
+- `exec()`函数：包括一系列函数：调用一个程序，完全取代该进程；
+
+  | 函数         | pathname | filename |  参数表  | argv[] | anviron | envp[] |
+  | ---------- | :------: | :------: | :---: | :----: | :-----: | :----: |
+  | `execl()`  |    *     |          |   *   |        |    *    |        |
+  | `execlp()` |          |    *     |   *   |        |    *    |        |
+  | `execle()` |    *     |          |   *   |        |         |   *    |
+  | `execv()`  |    *     |          |       |   *    |    *    |        |
+  | `execvp()` |          |    *     |       |   *    |    *    |        |
+  | `execve()` |    *     |          |       |   *    |         |   *    |
+  | 名字中的字母     |          |    p     | l参数列表 | v参数数组  |         |   e    |
+
+  > path 和 file：如果filename中含有`/`就将其视为路径（pathname）
+  >
+  > 只有`execve()`是内核系统调用，其余只是库函数，
+
+- `system()`：允许调用一个一个shell命令；
+
+#### d.进程的调度
+
+- 典型的进程调度算法有：
+  - 先来先去，FCFS（first come，first service）
+  - 短作业（进程）优先，SJP
+  - 轮转法
+  - 多级反馈队列
+- 可以通过调整nice`值来调整调度优先级，值越小，优先级越高；
+- 进程时间：也称CPU时间，度量进程使用CPU资源，以时钟滴答计算，类型为`clock_t` ，UNIX系统为进程维护了3个进程时间时，时钟时间、用户CPU时间、系统CPU时间；
+  - 时钟时间：又称墙上时钟时间，进程运行的时间总量；
+  - 用户CPU时间：执行用户指令所用的时间量，
+  - 系统CPU时间：执行内核程序所用时间。
+  - 可以用`times(struct tms *buf);` 获取，结构体中包含本身和子进程的用户CPU时间和系统CPU时间；
+
+### 3.进程间通信
+
+#### a.管道
+
+#### b.FIFO
+
+#### c.消息队列
+
+#### d.信号量
+
+#### e.共享内存
+
+## 二.信号
+
+
+
+## 三.线程  
 
 每个线程都包含有表示执行环境所需的信息，其中包括：**线程ID，一组寄存器值，栈，调度优先级和策略，信号屏蔽字，errno变量，线程私有数据**；一个进程的所有信息，对该进程的所有线程都是共享的，包括**可执行程序的代码，程序的全局内存和堆内存，栈以及文件描述符号**；
 
@@ -253,4 +322,7 @@
   int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
   ```
 
-  ​
+## 四.Socket
+
+## 五.高级IO
+
