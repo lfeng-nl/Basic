@@ -326,3 +326,48 @@
 
 ## 五.高级IO
 
+- ==同步(synchronize)==：调用者主动等待 调用 的结果；
+- ==异步(Asynchronize)==：调用者不等待调用结果，而是“被调用者”通过状态、通知来通知调用者，或者通过回调函数来处理这个调用；
+- ==阻塞(block)==：在调用结果返回之前，当前线程会被挂起，调用线程只有在得到结果之后才会返回；
+- ==非阻塞(Non-block)==：在调用结果返回之前，当前线程不会被阻塞挂起；
+- 系统调用可以简单分为：“低速”系统调用和其他系统调用；**低速系统调用是指可能会使进程永远阻塞的一类系统调用**；
+- 标准输入，输出，错误输出的文件描述符：`STDIN_FILENO, STDOUT_FILENO,STDERR_FILENO`;
+
+### 1.非阻塞I/O
+
+- 给文件描述符设置`O_NONBLOCK`属性，调用`open() read() write()`时，不能完成则立刻出错返回；
+
+### 2.I/O 多路转接
+
+- 当同时读取两个描述符时会遇到问题：当一个文件阻塞时就无法对另一个文件操作；解决思路有：
+  - 两个进程分别处理，比较复杂；
+  - 使用一个进程，但使用非阻塞I/O;轮寻，
+  - 异步I/O：进程告诉内核，当描述符准备好可以I/O时，用一个信号通知该进程；问题：根据信号无法区分是哪个具体的描述符准备好了；
+  - I/O 多路转接：首先构造一个感兴趣的描述符表，然后调用一个函数，直到描述符中的一个已经准备好进行I/O；该函数才返回；
+
+- select：
+
+  ```c
+  int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+  // nfds: 三个文件描述符集合中最大的文件描述符 + 1；
+  // fd_set: 一个特殊结构体，通过 以下宏操作
+  //         FD_ZERO(&set); 将set清零
+  //         FD_SET(fd, &set); 将set清零
+  //         FD_CL(fd, &set); 将set清零
+  // timeout: 最多等待时间，==NULL 捕捉不到信号，无限等待；==0；不等待立刻返回；
+  // 返回：准备就绪的文件描述符数目，超时返回0，出错返回-1；
+  ```
+
+- poll：目前已被epoll取代,
+
+  ```c
+  int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+  // 与select 类似
+  struct pollfd{
+   	int fd;
+  	short events;
+   	short revents;
+  }
+  ```
+
+- epoll：是select/poll的增强版本
