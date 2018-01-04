@@ -125,20 +125,138 @@
   - 用户CPU时间：执行用户指令所用的时间量，
   - 系统CPU时间：执行内核程序所用时间。
   - 可以用`times(struct tms *buf);` 获取，结构体中包含本身和子进程的用户CPU时间和系统CPU时间；
+- 进程状态：
+  - 阻塞：也称挂起，因等待某些事件而暂时不能运行；
+  - 执行：占用CPU，并在CPU上运行；
+  - 就绪：具备运行条件，但是CPU还未分配；
 
-### 3.进程间通信
+#### e.其他
+
+- 用户标示：任一进程都可以得到其实际用户ID和有效用户ID及组ID；
+
+### 3.进程间通信 IPC
 
 #### a.管道
 
+- 局限性：1.半双工，数据只能在一个方向流动；2.一般使用方式：创建管道，fork，子进程和父进程之间就可以使用管道通信；
+
+  ```c
+  int pipe(int fd[2]);				// fd[0]为读而打开，fd[1]为写打开
+  ```
+
+- 当缓冲为空时，读断阻塞；缓冲满时，写端阻塞；
+
+- 可以通过`fcntl(fd, F_SETFL, O_NONBLOCK);`设置为非阻塞模式；
+
+- 常用套路：读端的进程通常首先关闭写描述符，写端的程序首先关闭读描述符；
+
+- `popen`和`pclose`：
+
+  ```c
+  FILE *popen(const char *command, const char *type);			// 执行fork，然后调用exec执行command，type可以为"r"或"w";
+  int pclose(FILE *fp);
+  ```
+
 #### b.FIFO
 
+也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
+
+```c
+int mkfifo(const char *pathname, mode_t mode);				// 创建一个命名管道文件
+int mkfifoat(int fd, const char *pathname, mode_t node);
+```
+
+- FIFO文件的读写：
+  - 只读open会阻塞到某个其他进程为写而打开这个FIFO为止；类似，只写open要阻塞到某个进程为读而打开为止；
+  - 如果指定了`O_NONBLOCK`，则不会阻塞，立刻返回，失败返回-1；
+- FIFO有两种用途：
+  - shell命令使用FIFO将数据从一条管道传递到另一条时，无需创建中间临时文件；
+  - 客户进程-服务进程应用程序中，FIFO用作汇聚点，在客户进程和服务器进程二者之间传递数据；
+
 #### c.消息队列
+
+> 消息队列，信号量以及共享存储器，统称为XSI IPC
+
+
 
 #### d.信号量
 
 #### e.共享内存
 
+### 4.守护进程
+
+生存期长的一种进程，常常是在系统引导装入时启动，在系统关闭时终止；一般在后台运行；
+
 ## 二.信号
+
+- 信号都是以SIG开头，在`<signal.h>`中，信号名都被定义为正整数常量（信号编号）；
+
+- 在信号出现时，可以有三种方式进行信号处理：1.忽略此信号；2.捕捉信号；3.执行系统默认动作（大多数默认动作就是终止进程）；
+
+- `signal`函数：由于多个不同的历史版本，推荐用`sigaction()`替代；
+
+  ```c
+  typedef void (*sighandler_t)(int);
+  sighandler_t signal(int signum, sighandler_t handler);
+  ```
+
+- `sigaction`函数：
+
+  ```c
+  int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+  struct sigaction {
+  	void     (*sa_handler)(int);   // 信号处理函数
+  	void     (*sa_sigaction)(int, siginfo_t *, void *);  // 另一个信号处理函数
+  	sigset_t   sa_mask;				// 在信号处理期间需要屏蔽的信号
+  	int        sa_flags;			// 指定信号处理行为，可以按位或组合
+  	void     (*sa_restorer)(void);	// 目前废弃
+  };
+
+  /* demo */
+  static void sig_usr(int signum)
+  {
+  	printf("I got signal %d\n", sig);
+  }
+
+  int main()
+  {
+  	struct sigaction act;
+  	act.sa_handler = sig_usr;   			//信号处理函数
+    	sigemptyset(&act.sa_amsk);
+    	act.sa_flags = 0;
+  	sigaction(SIGINT, &act, NULL);			// 终止信号
+  	printf("My PID is %d\n", getpid());
+  	while(1)
+      {
+        sleep(1);
+      }
+  	return 0;
+  }
+  ```
+
+- `kill`和`raise`
+
+  ```c
+  int kill(pid_t pid, int signo);			// 将信号发送给进程或进程组
+  int raise(int signo);					// 向自身发送信号
+  ```
+
+- `alarm` 和`pause`
+
+  ```c
+  unsigned int alarm(unsigned int seconds);		// seconds秒后产生 SIGALRM信号；
+  int pause(void);								// 进程挂起，直到捕捉到一个信号
+  ```
+
+- 信号集：`sigset_t` 一个能表示多个信号的数据结构类型；系统提供了一系列函数还操作信号集；
+
+  ```c
+  int sigemptyset(sigset_t *set);
+  int sigfillset(sigset_t *set);
+  int sigaddset(sigset_t *set, int signo);
+  int sigdelset(sigset_t *set, int signo);
+  int sigismember(const sigset_t *set, int signo);
+  ```
 
 
 
