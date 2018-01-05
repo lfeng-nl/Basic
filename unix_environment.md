@@ -130,6 +130,7 @@
   - 挂起：原因不一定时阻塞，
   - 执行：占用CPU，并在CPU上运行；
   - 就绪：具备运行条件，但是CPU还未分配；
+  - 通过STAT代码可以判断进程当前状态：S，睡眠，通常是等待某个事件的发生；R，运行，处于正在执行或即将运行的状态；D，不可中断睡眠，通常是等待输入或输出完成；T，停止，通常是被shell作业控制所停止，或调试器停止；Z，进程僵死；
 
 #### e.其他
 
@@ -142,7 +143,7 @@
 - 局限性：1.半双工，数据只能在一个方向流动；2.一般使用方式：创建管道，fork，子进程和父进程之间就可以使用管道通信；
 
   ```c
-  int pipe(int fd[2]);				// fd[0]为读而打开，fd[1]为写打开
+  int pipe(int fd[2]);				// fd[0]为读而打开，fd[1]为写打开，需要用底层读写
   ```
 
 - 当缓冲为空时，读断阻塞；缓冲满时，写端阻塞；
@@ -162,7 +163,7 @@
 
 #### b.FIFO
 
-一个特殊的文件，文件类型为`p`,也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
+> 一个特殊的文件，文件类型为`p`,也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
 
 ```c
 int mkfifo(const char *pathname, mode_t mode);				// 创建一个命名管道文件
@@ -217,7 +218,9 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
   ```
 
-#### e.信号量semaphore
+#### e.信号量 semaphore
+
+> 信号量：一个特殊变量，只允许对它进行等待和发送信号两种操作；
 
 - 为获取共享资源，进程需要执行以下操作：
 
@@ -228,18 +231,41 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 
 - 信号的初值：表明有多少共享资源单位可以供使用；
 
-  ```c
-  int semget(key_t key, int nsems, int flag);			// nsems:该集合中的信号量数,如果是创建新集合则必须指定nsems，如果是引用现有的，则为0；flag：IPC_CREAT|IPC_EXCL,创建一个信号量，成功，返回信号量标识，失败返回-1；
-  int semop(int semid, struct sembuf *sops, size_t nops);   //nops,指定了sops的数量，该函数具有原子性
-  struct sembuf{
-    unsigned short sen_num;
-    short sem_op;					// 操作数，可为正（释放占用资源）可为负（获取）；0表示调用进程希望等待到信号量值变为0；
-    short sem_flg;				// IPC_NOWAIT无资源立刻出错返回, SEM_UNDO,
-  }
-  int semctl(int semid, int semnum, int cmd, ....)    // cmd:ICP_RMID 从系统中删除该信号量集合
+- ```c
+  int semget(key_t key, int nsems, int flag);		// 创建或得到一个信号量，返回标识符，失败返回-1
   ```
 
-- 进程退出`exit`：内核自动处理，调整相应信号量；
+  - `key`：一个整数值，不相关的进程可以通过它访问同一个信号量。程序对所有信号量的访问都是间接的，它先提供一个键，再由系统生成一个相应的信号量标识符；==任何进程只要key值相同，都能拿到同一个信号量的标识符==
+  - `nesms`：用于指定需要的信号量数目，几乎总是1；
+  - `flag` ：通过使用`IPC_CREAT|IPC_EXCL` 来确保创建出一个新的、唯一的信号量；
+
+- ```c
+  int semop(int semid, struct sembuf *sops, size_t nops);   //用于改变信号量的值
+  ```
+
+  - `semid` ：信号量标识符；
+
+  - `struct sembuf *sops` ：
+
+    ```c
+    struct sembuf{
+      unsigned short sen_num;
+      short sem_op;	
+      short sem_flg;
+    } 
+    ```
+
+    - `sem_num` ：信号量编号，除非使用一组信号量，否则一般取0；
+    - `sem_op` ：信号量在一次操作中需要改变的数值，可正，可负；
+    - `sem_flg` ：常被设置为`SEM_UNDO` ,如果进程没有释放该信号量的情况下终止，操作系统将自动释放该进程持有的信号量；
+
+  - ```c
+    int semctl(int semid, int semnum, int cmd, ....)； //直接控制信号量信息
+    ```
+
+    - `cmd` :常用的有,`SETVAL` 用来把信号量初始化为一个已知的值，通过`union semun` 中的`val`设置`semctl(semid, 0, SETVAL, num);` ；`IPC_RMID` 用于删除一个已经无需继续使用的信号量标识符；
+
+- 信号量也是一种有限资源，需要节约使用；
 
 - 还可以用于生产者消费者的问题：一部分进程增加信号量（增加资源），一部分减少信号量（消耗资源）
 
