@@ -126,7 +126,8 @@
   - 系统CPU时间：执行内核程序所用时间。
   - 可以用`times(struct tms *buf);` 获取，结构体中包含本身和子进程的用户CPU时间和系统CPU时间；
 - 进程状态：
-  - 阻塞：也称挂起，因等待某些事件而暂时不能运行；
+  - 阻塞：等待某些事件而暂时不能运行；
+  - 挂起：原因不一定时阻塞，
   - 执行：占用CPU，并在CPU上运行；
   - 就绪：具备运行条件，但是CPU还未分配；
 
@@ -157,9 +158,11 @@
   int pclose(FILE *fp);
   ```
 
+- 只有父、子进程把针对管道的所有写描述符都关闭，管道才会被认为是关闭了，对管道的read调用才会失败；
+
 #### b.FIFO
 
-也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
+一个特殊的文件，文件类型为`p`,也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
 
 ```c
 int mkfifo(const char *pathname, mode_t mode);				// 创建一个命名管道文件
@@ -168,20 +171,79 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
 
 - FIFO文件的读写：
   - 只读open会阻塞到某个其他进程为写而打开这个FIFO为止；类似，只写open要阻塞到某个进程为读而打开为止；
-  - 如果指定了`O_NONBLOCK`，则不会阻塞，立刻返回，失败返回-1；
+  - 如果打开方式为`O_RDONLY|O_NONBLOCK`，即使没有进程以写方式打开，这个调用也会==立刻成功返回==，
+  - 如果打开方式为`O_WRONLY|O_NONBLOCK,` 如果没有进程以读方式打开，则==立刻失败返回-1==；
+
 - FIFO有两种用途：
   - shell命令使用FIFO将数据从一条管道传递到另一条时，无需创建中间临时文件；
   - 客户进程-服务进程应用程序中，FIFO用作汇聚点，在客户进程和服务器进程二者之间传递数据；
 
-#### c.消息队列
+- FIFO信息不交错条件：每个写请求是发往一个阻塞FIFO的，并且每个写请求的数据长度小于等于一个`PIPE_BUF`;
 
-> 消息队列，信号量以及共享存储器，统称为XSI IPC
+  > pipe 和FIFO 用于实现进程间相互发送非常短小的，频率很高的消息，适用于两个进程间的通信；
 
+#### c.XSI IPC
 
+XSI IPC 包括：消息队列，信号量，及共享内存；
 
-#### d.信号量
+- IPC标示符：用于标示内核中的IPC结构，标示符为IPC对象的内部名，对外与一个键（key）相关联；
 
-#### e.共享内存
+- 键（key）：做为IPC对象的外部名；类型为`key_t`;
+
+- 权限结构：XSI IPC为每个结构关联了一个`ipc_perm` 的结构体，该结构体规定了权限和所有者‘
+
+  - 类似文件的权限，但无执行，也就是只有2写,4读,6
+
+- 特点：IPC结构体在系统范围起作用，没有引用计数；在文件系统中没有名字；
+
+  > 共享内存用于实现进程间共享的，非常庞大的、读写操作频率很高的数据（配合信号量使用）；多用于多进程间的通信；
+  >
+  > 其他的可以用socket；
+  >
+  > 消息队列，不建议使用；
+  >
+  > 信号量：用于线程调度，所谓的线程调度就是：一些线程生产同时一些线程消费，semaphore可以让生产和消费保持合乎逻辑的执行顺序；
+  >
+  > mutex：用于保护共享资源，服务于共享资源；
+
+#### d.消息队列
+
+- 消息队列：消息的连接表，存储在内核中，由消息队列标识符标识。
+
+  ```c
+  int msgget(key_t key, int flag);
+  int msgctl(int msgqid, int cmd, struct msqid_ds *buf);
+  int msgsnd(int msqid, const void *ptr, size_t nbytes, int flag);
+  ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
+  ```
+
+#### e.信号量semaphore
+
+- 为获取共享资源，进程需要执行以下操作：
+
+  - 1.测试控制该资源的信号量，
+  - 若为0，则进程休眠，直到信号量值大于0；
+  - 若为正，则进程使用资源，进程会将信号量值减1；
+  - 当进程不在使用时，信号量郑1；
+
+- 信号的初值：表明有多少共享资源单位可以供使用；
+
+  ```c
+  int semget(key_t key, int nsems, int flag);			// nsems:该集合中的信号量数,如果是创建新集合则必须指定nsems，如果是引用现有的，则为0；flag：IPC_CREAT|IPC_EXCL,创建一个信号量，成功，返回信号量标识，失败返回-1；
+  int semop(int semid, struct sembuf *sops, size_t nops);   //nops,指定了sops的数量，该函数具有原子性
+  struct sembuf{
+    unsigned short sen_num;
+    short sem_op;					// 操作数，可为正（释放占用资源）可为负（获取）；0表示调用进程希望等待到信号量值变为0；
+    short sem_flg;				// IPC_NOWAIT无资源立刻出错返回, SEM_UNDO,
+  }
+  int semctl(int semid, int semnum, int cmd, ....)    // cmd:ICP_RMID 从系统中删除该信号量集合
+  ```
+
+- 进程退出`exit`：内核自动处理，调整相应信号量；
+
+- 还可以用于生产者消费者的问题：一部分进程增加信号量（增加资源），一部分减少信号量（消耗资源）
+
+#### f.共享内存
 
 ### 4.守护进程
 
@@ -258,6 +320,20 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
   int sigismember(const sigset_t *set, int signo);
   ```
 
+- 关键的信号：
+
+  | 信号      | 说明                                       |
+  | ------- | ---------------------------------------- |
+  | SIGINT  | 当用户按中断键（Ctrl+c）时，终端产生此信号并发送给前台进程；        |
+  | SIGKILL | 不能被忽略，不能被捕捉；向系统管理员提供一种可以杀死任意进程的可靠方式；     |
+  | SIGTERM | 由kill命令发送的系统默认终止信号，可以由应用程序捕获，使其有机会做好清理工作； |
+  | SIGEGV  | 执行了一个进程执行了一个无效的内存引用，或发生段错误时发送给它的信号；      |
+  | SIGCHLD | 进程终止或停止时，将SIGCHLD信号发送给其父进程，默认忽略；         |
+  | SIGALRM | 当alarm函数设置的定时器超时时，产生此信号。                 |
+  | SIGUSR1 | 用户定义信号，可用于应用程序                           |
+  | SIGUSR2 | 同上；                                      |
+
+  ​
 
 
 ## 三.线程  
@@ -384,10 +460,14 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
 - 如果一个程序试图对一个互斥量加锁两次，那么它自身就会陷入死锁状态；
 - 如果一个以上的互斥量时，如果允许一个程序一直占有第一个互斥亮并且在试图锁住第二个互斥量时处于阻塞状态，但是拥有第二个互斥量的进程也试图锁住第一个互斥量。**两个线程都试图获取对方占有的资源，就产生了死锁**
 - 避免方式：
-  - 控制加锁顺序
+  - 多资源加锁一定要注意：==严格控制加锁顺序，以避免死锁==
   - 使用`pthread_mutex_trylock()`，避免进程阻塞；如果加锁不成功，清理资源，过段时间在试；
 
-#### ｃ.读写锁
+#### c.条件变量
+
+
+
+#### d.读写锁
 
 类似互斥锁，但比互斥更高效；读写锁有三种模式：读模式锁，写模式锁，不加锁；可以有多线程同时占用读锁，但只有一个线程能占用写锁；读写锁类型为：`pthread_rwlock_t`
 
@@ -411,7 +491,7 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
   int pthread_rwlock_timedwrlock(pthread_rwlock_t * lock, const struct timespec *tsptr);
   ```
 
-#### ｄ.自旋锁
+#### e.自旋锁
 
 自旋锁与互斥量类似，但是不通过休眠使进程阻塞，而是在获取锁之前一直处于忙等（自旋）阻塞状态；可以用于锁持有时间短，且线程不希望在重新调度上花时间；在锁空闲时立刻获得；
 
@@ -430,7 +510,7 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
     int pthread_spin_unlock(pthread_spinlock_t *lock);
   ```
 
-#### e.屏障
+#### f.屏障
 
 屏障（barrier）是用户协调多个线程并行执行工作的同步机制；屏障允许每个线程等待，直到所有的合作线程都到达某一点，然后从该点继续执行；
 
