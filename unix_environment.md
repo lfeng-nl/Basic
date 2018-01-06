@@ -1,4 +1,4 @@
-# 本文介绍unix环境编程相关知识
+本文介绍unix环境编程相关知识
 
 > cpu工作原理,自动取址执行-->管理cpu就是设置PC值-->多道程序，交替执行 --> 并发 -->  如何实现并发？（切换PC、记录返回地址) --> PCB记录信息（切出去时程序执行的上下文：进程标识符、处理机的信息（通用寄存器，指令计数器，PSW，用户的栈指针、进程调度信息（进程状态，进程的优先级...)、进程控制信息（进程同步和通信机制，链接指针...)
 >
@@ -21,23 +21,25 @@
 ### 1.进程环境
 
 - `main(int argc, char *argv[])`函数：`argc`参数个数，`argv`参数列表`argv[0]`为函数名；
-- 进程表：保存当前进程的所有相关信息，包括PID，进程状态，命令字符串，和其他一些`ps`命令输出的各类信息。
 
 
 - 进程终止：`exit()`先执行清理处理（用户登记的清理函数，IO库的清理和关闭），然后返回内核；`_exit()`和`_Exit()`立即进入内核；`atexit()`登记处理函数，执行时按登记顺序的逆序执行；
 
   > 在`main()`中调用`exit(0)`等价于`return(0)` ；
 
-- 环境表：每个进程都会有一张环境表，包含为这个进程建立的环境变量；全局变量`environ`包含了该指针数组的地址；如需使用则需要声明`extern char **environ;`一般用户可以用`getenv()`和`putenv()`使用特定的环境变量；
+- 进程表：保存当前进程的所有相关信息，包括PID，进程状态，命令字符串，和其他一些`ps`命令输出的各类信息。
 
-  - `putenv(char *str)` ：传入`name=value`的字符串；
-  - `setenv(const char *name, const char *value, int overwrite)` ：overwrite是否重写；
+- 环境表：每个进程都会有一张环境表,以`NULL`结尾，包含为这个进程建立的环境变量,；全局变量`environ`包含了该指针数组的地址；如需使用则需要声明`extern char **environ;`一般用户可以用`getenv()`和`putenv()`使用特定的环境变量；
+
+  - `int putenv(char *str)` ：改变或添加环境变量，传入`"name=value"`的字符串；
+  - `char* getenv(sonst chat *name);` ：获取环境变量的值；
+  - `int setenv(const char *name, const char *value, int overwrite)` ：也是改变环境变量，`name`: 环境变量名，`value` ：设置值，overwrite是否重写；
 
 - 程序空间布局，从低地址向上依次为：
 
   - **text**：文本段，只读，CPU执行的机器指令，共享的，存储器中通常只有一个副本；
-  - **data**：数据段，存储初始化后全局变量，
-  - **bss**：未初始化数据段，
+  - **data**：数据段，存储初始化后全局变量;
+  - **bss**：未初始化数据段;
   - **堆**：动态存储分配；
   - **栈**：自动变量，函数调用信息；
   - **命令行参数和环境变量**：
@@ -48,51 +50,85 @@
 
 - 共享库：静态库( .a)和动态库( .so);
 
-  - `dlopen()` ：打开动态链接库，返回一个句柄给调用进程；
-  - `dlsym()` ：通过**句柄**和**连接符号名称**获取函数名或变量名；
-  - `dlclose()` ：将已装载库引用计数减一，当减至零时，库被卸载；
+  - `void *dlopen(const char *filename, int falgs)` ：打开动态链接库，返回一个句柄给调用进程；
+  - `void *dlsym(void *handle, const char *symbol)` ：通过**句柄**和**连接符号名称**获取函数名或变量名；
+  - `void *dlclose(const char *filename, int flags)` ：将已装载库==引用计数减一==，当减至零时，库被卸载；
 
-- 存储空间分配：`malloc(),free()` , `calloc()`空间中每位初始化为0；
+- 存储空间分配：`malloc(),free()` ； `calloc(size_t nmemb, size_t size)` ；为指定长度的对象分配空间，空间中每位初始化为0；
 
-- 查询和更改资源限制：`getrlimit()` ：
+- 跨越函数的跳转：`int setjmp(jmp_buf env),void longjmp(jmp_buf env, int val)`
+
+- 查询和更改资源限制：
+
+  - `int getrlimit(int resource, struct rlimit *rlptr);` ：查询资源限制，
+
+  - `int setrlimit(int resource, const struct rlimit *rlptr);` ：设置资源限制；
+
+    ```c
+    struct rlimit{
+      rlim_t rlim_cur;
+      rlim_t rlim_max;
+    }
+    ```
 
 ### 2.进程控制
 
-- 进程标识：每个进程都有一个非负的唯一进程ID，类型`pid_t` ；`getpid(),getppid()`
+- 进程标识：每个进程都有一个非负的唯一进程ID，类型`pid_t` ；`pid_t getpid(void), pid_t getppid(void)`
 
 #### a.创建
 
-- 一个现有的进程调用`fork()`创建一个新的进程，子进程为父进程的一个副本（拷贝）：
-
-  ```c
-  pid_t fork(void);             	//子进程返回0，父进程返回子进程ID，出错返回-1
-  pid_t vfork(void);				//创建子进程，并阻塞父进程直到子进程终止exit()或调用exec();
+- ```c
+  pid_t fork(void);           // 子进程返回0，父进程返回子进程ID，出错返回-1
   ```
+
+  - 一个现有的进程调用`fork()`创建一个新的进程，子进程为父进程的一个副本（拷贝）：
+
+
+  - 写时复制技术：数据段、栈和堆由父子进程共享，内核将访问权限改为只读，只有修改区域的那块内存制作一个副本；
+  - `fork()` 失败的原因：系统中已经有了太多的进程、该用户ID的进程总数超过了系统限制；
+
+- ```c
+  pid_t vfork(void);			// 创建子进程，并阻塞父进程直到子进程终止exit()或调用exec();
+  ```
+
+  - 用`vfork`创建新进程的目的是用`exec`一个新的程序；
+  - 保证子进程先运行，在它调用`exec` 或 `exit` 之后父进程才被调度；
 
 #### b.进程退出
 
 - 进程有五种退出方式：1、`main`中`return`,2、调用`exit()`，3、调用`_exit()`， 4，进程最后一个线程中执行`return`语句，5、进程最后一个线程调用`pthread_exit()`;
 
+- 进程异常退出：1.调用`abort()` ,2.收到一个信号；3.最后一个线程被取消；
+
 - 当进程终止时，内核会向其父进程发送`SIGCHLD`信号，终止进程的父进程都能通过`wait()`或`waitpid()` 取得其终止状态；
 
-  ```c
-  pid_t wait(int *status);		// 调用者阻塞，直到有一个子进程终止，如果有僵死子进程也立刻返回；
-  pid_t waitpid(pid_t pid, int *status, int options);		// 等待指定的进程，可以不阻塞等待；
-  int waitid(idtype_t idtype, id_t id, siginfo_t *info, int options);
-  /*
-  	status 为返回状态，可以用<sys/wait.h>中定义的宏来查看具体内容：
-  		WIFEXITED(status):正常终止为真，可以用WEXITSTATUS(status) 获取exit()返回值；
-  		WIFSIGNALED(status):
-  		WIFSTOPPED(status):
-  		WIFCONTINUED(status):
-  */
+- ```c
+  pid_t wait(int *status);				// 返回子进程PID；
   ```
+
+  -  调用者阻塞，直到有一个子进程终止，如果有僵死子进程也立刻返回；
+
+  - `status` :存放子进程的返回信息，可用通过定义宏来解释状态信息；
+
+    ```c
+    WIFEXITED(status);		// 正常终止为真，可以用
+    WEXITSTATUS(status);	// 获取exit()返回值；
+    WIFSIGNALED(status);	// 如果进程因为一个未捕获的信号而中止，就取非零值
+    ...
+    ```
+
+- ```c
+  pid_t waitpid(pid_t pid, int *status, int options);		// 等待指定的进程，可以不阻塞等待；
+  ```
+
+  - 可以等待指定子进程、任意子进程、等待组；
+  - 可以不阻塞；
 
 - 当子进程终止退出时，父进程并未对其发出的`SIGCHLD`信号进行适当处理，导致子进程停留在僵死状态等待其父进程为其收尸，这个状态下的子进程就是僵死进程；
 
 #### c.进程的使用
 
-- 竞争：当多个进程都企图对共享数据进行某种处理，而结果又取决于进程运行的顺序时，我们认为发生了竞争条件；
+- 竞争条件：当多个进程都企图对共享数据进行某种处理，而结果又取决于进程运行的顺序时，我们认为发生了竞争条件；
 
 - `exec()`函数：包括一系列函数：调用一个程序，完全取代该进程；
 
@@ -108,9 +144,15 @@
 
   > path 和 file：如果filename中含有`/`就将其视为路径（pathname）
   >
-  > 只有`execve()`是内核系统调用，其余只是库函数，
+  > 只有`execve()`是内核系统调用，其余只是库函数，整合参数后还是调用`execve()`
 
 - `system()`：允许调用一个一个shell命令；
+
+- 更改用户ID和组ID
+
+  - UNIX系统中，特权和访问控制是基于用户ID和组ID的，当程序需要访问当前并不允许访问的资源时，需要更换自己的用户ID或组ID；
+  - `int setuid(uid_t uid);`
+  - `int setgid(gid_t gid);`
 
 #### d.进程的调度
 
@@ -135,8 +177,11 @@
 #### e.其他
 
 - 用户标示：任一进程都可以得到其实际用户ID和有效用户ID及组ID；
+- 会话（session)：是一个或多个进程组的集合。
 
 ### 3.进程间通信 IPC
+
+> 管道和FIFO使用较多，可有效应用于应用程序，尽可能避免使用消息队列以及信号量，应考虑全双工管道和记录锁，
 
 #### a.管道
 
@@ -207,18 +252,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   >
   > mutex：用于保护共享资源，服务于共享资源；
 
-#### d.消息队列
-
-- 消息队列：消息的连接表，存储在内核中，由消息队列标识符标识。
-
-  ```c
-  int msgget(key_t key, int flag);
-  int msgctl(int msgqid, int cmd, struct msqid_ds *buf);
-  int msgsnd(int msqid, const void *ptr, size_t nbytes, int flag);
-  ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
-  ```
-
-#### e.信号量 semaphore
+#### d.信号量 semaphore
 
 > 信号量：一个特殊变量，只允许对它进行等待和发送信号两种操作；
 
@@ -270,6 +304,59 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 - 还可以用于生产者消费者的问题：一部分进程增加信号量（增加资源），一部分减少信号量（消耗资源）
 
 #### f.共享内存
+
+允许多个进程共享一个给定的存储区，用信号量同步共享存储访问；
+
+- ```c
+  int shmget(key_t key, size_t size, int shmflg);			// 创建共享内存，返回共享内存表示符
+  ```
+
+  - `key`：同信号量类似；
+  - `size` ：指定需要的共享内存的容量，单位字节；
+  - `shmflg`：`IPC_CREAT`,创建共享内存
+
+- ```c
+  void *shmat(int shmid, const void *addr, int flag);  //启用共享内存，连接到一个进程地址空间
+  ```
+
+  - `addr`：指定共享内存连接到当前进程中的地址位置；通常是一个==空指针==，表示让系统来选择地址；
+  - `flag` ：位标志，
+
+- ```c
+  int shmdt(const void *addr);					// 将共享内存从当前进程中分离
+  ```
+
+  - 注意：不是删除，只是分离，使得该共享内存对当前进程不再可用；
+
+- ```c
+  int shmctl(int shmid, int cmd, struct shmid_ds *buf);  
+  ```
+
+  - `shmid` ：共享内存的标识符；
+  - `cmd`：可以为`IPC_STAT` 得到共享内存设置放到`buf`中, `ICP_SET` 将共享内存设置为给定值, `IPC_RMID`, 删除共享段内存；
+
+#### g.消息队列
+
+- ```c
+  int msgget(key_t key, int msgflg);             // 返回消息队列标识符
+  ```
+
+- ```c
+  int msgsnd(int msqid, const void *msg_ptr, size_t msg_sz, int msgflg);//将消息发送到消息队列
+  ```
+
+  - `msg_sz` :指向一个准备发送消息的指针，包含正的整形消息类型，消息数据，例如
+
+    ```c
+    struct mymesg{
+      long mtype;				// 消息类型
+      char mtex[512];			// 消息
+    }
+    ```
+
+- ```c
+  ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
+  ```
 
 ### 4.守护进程
 
