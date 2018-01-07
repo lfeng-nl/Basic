@@ -371,7 +371,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 - `signal`函数：由于多个不同的历史版本，推荐用`sigaction()`替代；
 
   ```c
-  typedef void (*sighandler_t)(int);
+  typedef void (*sighandler_t)(int);							//函数指针
   sighandler_t signal(int signum, sighandler_t handler);
   ```
 
@@ -423,15 +423,12 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   int pause(void);								// 进程挂起，直到捕捉到一个信号
   ```
 
-- 信号集：`sigset_t` 一个能表示多个信号的数据结构类型；系统提供了一系列函数还操作信号集；
-
-  ```c
-  int sigemptyset(sigset_t *set);
-  int sigfillset(sigset_t *set);
-  int sigaddset(sigset_t *set, int signo);
-  int sigdelset(sigset_t *set, int signo);
-  int sigismember(const sigset_t *set, int signo);
+- ```c
+  unsigned int sleep(unsigned int seconds);		//挂起进程 seconds 秒
   ```
+
+  - 当时间到了，进程恢复；
+  - 当进程捕捉到了信号，并从信号处理函数中退出时；
 
 - 关键的信号：
 
@@ -439,7 +436,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   | ------- | ---------------------------------------- |
   | SIGINT  | 当用户按中断键（Ctrl+c）时，终端产生此信号并发送给前台进程；        |
   | SIGKILL | 不能被忽略，不能被捕捉；向系统管理员提供一种可以杀死任意进程的可靠方式；     |
-  | SIGTERM | 由kill命令发送的系统默认终止信号，可以由应用程序捕获，使其有机会做好清理工作； |
+  | SIGTERM | 由`kill`命令发送的系统默认终止信号，可以由应用程序捕获，使其有机会做好清理工作； |
   | SIGEGV  | 执行了一个进程执行了一个无效的内存引用，或发生段错误时发送给它的信号；      |
   | SIGCHLD | 进程终止或停止时，将SIGCHLD信号发送给其父进程，默认忽略；         |
   | SIGALRM | 当alarm函数设置的定时器超时时，产生此信号。                 |
@@ -454,10 +451,14 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 每个线程都包含有表示执行环境所需的信息，其中包括：**线程ID，一组寄存器值，栈，调度优先级和策略，信号屏蔽字，errno变量，线程私有数据**；一个进程的所有信息，对该进程的所有线程都是共享的，包括**可执行程序的代码，程序的全局内存和堆内存，栈以及文件描述符号**；
 
 > 可以用==`#ifdef _POSIX_THREADS`==在编译时测试系统是否支持线程；
+>
+> 编译时需要加上：`-lpthread`连接线程库；
+
+- 可重入：可以被多次调用仍正常工作；这些调用可能来自多个线程，也可能来自嵌套调用；代码中可重入部分通常只使用局部变量；
 
 ### 1.线程的生生死死
 
-- 线程ID：用`pthread_t`类型表示，不同的操作系统实现不同，有的是**`struc`**，有的是**`long int`**；*linux中是无符号长整形*；
+- 线程ID：用`pthread_t`类型表示，不同的操作系统实现不同，有的是**`struc`**，有的是**`long int`**；*linux中是无符号长整形*；线程ID只有在它所属的进程环境中才有意义；
 
   ```c
   #include <pthread.h>
@@ -466,26 +467,24 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   ```
 
 - 线程的创建：线程创建时并不能保证那个线程会先运行；
+> 进程的创建和终止都能通过`void*`传递的值不止一个，需要注意的是，这个结构体所使用的内存在调用者完成调用以后必须仍然是有效的。可以使用全局结构或者`malloc`函数分配结构
 
-  > 进程的创建和终止都能通过`void*`传递的值不止一个，需要注意的是，这个结构体所使用的内存在调用者完成调用以后必须仍然是有效的。可以使用全局结构或者`malloc`函数分配结构
-
-  ```c
-  #include <pthread.h>
-  int pthread_create(pthread_t *restrict tid, const pthread_attr_t *restrict attr, void *(* start_rtn)(void *), void *restrict arg);
-  // tid：用于存放创建进程的进程ID
-  // attr：定制线程属性
-  // start_rtn：新线程从 start_rtn 函数地址开始运行； 
-  // arg：函数参数列表
-  // 返回值：成功，返回0，失败，返回错误代码；
-  /* restrict：是c99标准引入的，它只用于限定和约束指针，并表明指针是访问一个数据对象的唯一且初始的方式.即它告诉编译器，所有修改该指针所指向内存中内容的操作都必须通过该指针来修改,而不能通过其它途径(其它变量或指针)来修改;
-  */
+- ```c
+  int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(* start_routine)(void *), void *arg);                 //成功返回0，失败返回错误编号；
   ```
+
+  - `thread`：用于存放进程ID；
+  - `attr` ：设置进程属性，NULL设置默认属性；
+  - `start_routine` ：新线程从start_routine开始，该函数返回`void *` 类型，需要一个`void *` 类型参数；
+  - `arg` ：传入`start_routine`的参数，当需要多个参数时，可以放入结构体中，传入结构体指针；
 
 - 线程终止
 
-  如果进程中的任意线程调用了`exit、_Exit、_exit`，**整个进程就会终止**；线程；
+  如果进程中的任意线程调用了`exit、_Exit、_exit`，**整个进程就会终止**；线程；线程可以通过以下三种方式终止
 
-  线程可以通过以下三种方式终止：1.从启动例程中返回；2.被同进程的其他线程取消；3.线程调用`pthread_exit()`
+  - 1.从启动例程中返回`return `；
+  - 2.被同进程的其他线程取消`pthread_cancel()`；
+  - 3.线程调用`pthread_exit();`
 
   > exit：会调用**终止处理程序**、**标准I/O清理程序(刷新缓冲区)**，最后调用`_exit`或`_Exit`；
   >
@@ -493,21 +492,32 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   >
   > 在`main()`中执行`return`，相当于调用`exit()`；
   >
-  - `pthread_exit()`：
-
-    ```c
-    void pthread_exit(void *rval_ptr);			//终止调用的线程，并返回一个值存放于rval_ptr中
-    int pthread_join(pthread_t thread, void **rval_ptr);		//调用线程阻塞，等待指定进程终止，rval_ptr包含返回信息，或终止信息（如目标线程被取消，放置PTHREAD_CANCELED）；如果多个线程同时链接到一个指定线程，结果未定义；
-    // void **rval_ptr; 需要一个指针存放返回信息，这里传入指针的地址；
+  - ```c
+    void pthread_exit(void *rval_ptr);			//终止调用的线程
     ```
 
-  - `pthread_cancel()`
+    - `rval_ptr` ：与传入参数类似，可以通过`pthread_join`拿到这个指针；
+    - 注意：`rval_ptr` 指向的内容在线程退出后应该仍然有效；
 
-    ```c
-    int pthread_cancel(pthread_t tid);			//终止指定的线程，使进程返回一个PTHREAD_CANCELED
+  - ```c
+    int pthread_join(pthread_t thread, void **rval_ptr);		//调用线程阻塞，等待指定进程终
     ```
 
-  - 进程退出时：
+    - `thread` ：等待的线程ID；
+    - `rval_ptr` ：获得的返回结果，或终止信息（如目标线程被取消，放置`PTHREAD_CANCELED`；
+    - 如果多个线程同时链接到一个指定线程，结果未定义；
+    - ==利用pthread创建的线程必须使用join或detach释放线程资源；==
+
+  - ```c
+    int pthread_cancel(pthread_t tid);		//终止指定的线程，使线程返回一个PTHREAD_CANCELE
+    ```
+
+    - 请求取消同一进程中的其他线程；
+    - 被取消线程如同调用了参数为`PTHREAD_CANCELE` 的`pthread_exit()`;
+    - 并不等待线程退出，立刻返回，仅仅是通知；
+    - 被终止线程还可以执行设置好的终止函数；
+
+  - 线程清理函数：执行顺序与注册顺序相反，如同栈；
 
     ```c
     void pthread_cleanup_push(void (*rtn)(void *), void *arg);		//设置一个进程退出时需要执行的函数
@@ -538,35 +548,50 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
     > | `atexit()`  | `pthread_cleanup_push()` | 设置清理函数       |
     > | `getpid()`  | `pthread_self()`         | 获得自己的ID      |
     > | `abort()`   | `pthread_cancel()`       | 请求其他人退出      |
-
 ### 2.线程同步
 
 #### a.互斥量mutex
 
-对互斥量加锁以后，其他任何试图再次对互斥量加锁的线程都会被**阻塞**直到当前线程释放该互斥量；互斥量为`pthread_mutex_t`结构体，使用前必须初始化，也可以设置为常量`PTHREAD_MUTEX_INITIALIXZER`
+对互斥量加锁以后，其他任何试图再次对互斥量加锁的线程都会被**阻塞**直到当前线程释放该互斥量；互斥量为`pthread_mutex_t`结构体，使用前必须初始化，初始化方式有两种：1.静态分配的可以赋值为`PTHREAD_MUTEX_INITIALIZER`, 2.使用`pthread_mutex_init()` (静态分配和动态申请）；
 
-- 互斥量初始化和销毁
-
-  ```c
-  #inlcude <pthread.h>
-  /*
-  	mutex:初始化的互斥量
-  	attr：互斥量的属性
-  */
-  int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *attr);
-  int pthread_mutex_destroy(pthread_mutex_t *mutex);
+- ```c
+  int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr);
   ```
 
-- 互斥量的上锁解锁
+  - 初始化互斥量，成功返回0，否则返回错误编号；
+  - `mutex` ：指向互斥量的指针；
+  - `attr` ：属性，默认属性可置位`NULL`；
 
-  ```c
-  int pthread_mutex_lock(pthread_mutex_t *mutex);				// 上锁，不成功则阻塞
-  int pthread_mutex_trylock(pthread_mutex_t *mutex);			// 上锁，不成功不阻塞
-  int pthread_mutex_unlock(pthread_mutex_t *mutex);			// 解锁
-  int pthread_mutex_timedlock(pthread_mutex_t *restrict mutex,
-                 const struct timespec *restrict tsptr);		// 上锁，阻塞到指定（绝对）时间
-  															// 成功返回0，失败，返回错误编号
+- ```c
+  int pthread_mutex_destroy(pthread_mutex_t *mutex);		// 销毁信号量，
   ```
+
+  - 对于用`malloc`动态申请的互斥量，==释放内存前==需要调用`pthread_mutex_destroy()`，销毁锁所占用资源；
+  - Linux中，互斥锁不占用任何资源，函数只检查状态；
+
+- ```c
+  int pthread_mutex_lock(pthread_mutex_t *mutex);			// 上锁，成功返回0
+  ```
+
+  - 如果资源已经上锁，调用线程将阻塞直到互斥被解锁；
+
+- ```c
+  int pthread_mutex_trylock(pthread_mutex_t *mutex);		// 上锁，成功返回0
+  ```
+
+  - 如果互斥量已经上锁，则不阻塞，返回`EBUSY` ， 如果没有锁，则锁定互斥量，返回0；
+
+- ```c
+  int pthread_mutex_unlock(pthread_mutex_t *mutex);		// 解锁
+  ```
+
+- ```c
+  int pthread_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec *tsptr);		
+  ```
+
+  - 可以绑定线程阻塞时间，`tsptr`， 注意：指绝对时间！可以`clock_gettime(CLOCK_REALTIME, &tout);` `localtime(&tout.tv_sec);` 然后加上需要等待的时间； 
+  - 到达指定时间之前，同`pthread_mutex_lock()` 相同；
+  - 超时，未锁定，返回错误码`ETIMEDOUT` ；
 
 #### ｂ.死锁
 
@@ -574,11 +599,57 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 - 如果一个以上的互斥量时，如果允许一个程序一直占有第一个互斥亮并且在试图锁住第二个互斥量时处于阻塞状态，但是拥有第二个互斥量的进程也试图锁住第一个互斥量。**两个线程都试图获取对方占有的资源，就产生了死锁**
 - 避免方式：
   - 多资源加锁一定要注意：==严格控制加锁顺序，以避免死锁==
-  - 使用`pthread_mutex_trylock()`，避免进程阻塞；如果加锁不成功，清理资源，过段时间在试；
+  - 使用`pthread_mutex_trylock()`，避免线程阻塞；如果加锁不成功，清理资源，过段时间在试；
 
 #### c.条件变量
 
+条件变量给过个线程提供了一个会合的场所，条件变量与互斥量一起使用时，允许线程以==无竞争的方式等待特定的条件发生==；==条件本身是由互斥量保护==；类似互斥量，使用前需初始化，分两种：静态分配的赋值`PHTREAD_COND_INITIALIZER` 或用`pthread_cond_init()` ；条件变量类型`pthread_cond_t` ；
 
+- ```c
+  int pthread_cond_init(pthread_cond_t *cond, const ptrhead_condattr_t *attr)
+  ```
+
+  - `cond` ：指向一个条件变量；
+  - `attr` ：属性，置为`NULL` ，设置默认属性；
+
+- ```c
+  int pthread_cond_destroy(pthread_cond_t *cond);			//成功返回0
+  ```
+
+  - 释放条件变量的内存前，可以对其反初始化；
+
+- ```c
+  int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);	//成功返回0
+  int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec *tsptr);
+  ```
+
+  - 阻塞直到等待条件变为真；
+
+  - 传入==锁住的互斥锁==，函数自动把调用线程放到等待条件的线程列表上，对互斥量进行解锁。
+
+  - `pthread_cond_timedwait()` 多一个愿意等待的时间；这个时间值是一个绝对数；
+
+    ```c
+    struct timeval now;
+    struct timespec tsp;
+    gettimeofday(&now, NULL);
+    tsp.tv_sec = now.tv_sec;
+    tsp.tv_nsec = now.tv_usec * 1000;
+    tsp.tv_sec += wait_time;               // 期望的等待时间
+    ```
+
+- ```c
+  int pthread_cond_signal(pthread_cond_t *cond);
+  ```
+
+  - 通知线程，条件已经满足；至少能唤醒一个等待该条件的线程；
+  - 一般为控制线程在准备好相应条件后，通知等待线程，可以继续执行；
+
+- ```c
+  int pthread_cond_broadcast(pthread_cond_t *cond);
+  ```
+
+  - 能唤醒等待该条件的所有线程；
 
 #### d.读写锁
 
@@ -587,7 +658,6 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 - 初始化和销毁
 
   ```c
-  #include <pthread.h>
   int pthread_rwlock_init(pthread_rwlock_t * lock, const pthread_rwlockattr_t *attr);
   int pthread_rwlock_destroy(pthread_rwlock_t *relock);
   ```
@@ -606,7 +676,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 
 #### e.自旋锁
 
-自旋锁与互斥量类似，但是不通过休眠使进程阻塞，而是在获取锁之前一直处于忙等（自旋）阻塞状态；可以用于锁持有时间短，且线程不希望在重新调度上花时间；在锁空闲时立刻获得；
+自旋锁与互斥量类似，但是==不通过休眠使进程阻塞，而是在获取锁之前一直处于忙等（自旋）阻塞状态==，可以最快时间得到锁；可以用于锁持有时间短，且线程不希望在重新调度上花时间；在锁空闲时立刻获得；
 
 - 初始化和销毁
 
@@ -625,13 +695,27 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 
 #### f.屏障
 
-屏障（barrier）是用户协调多个线程并行执行工作的同步机制；屏障允许每个线程等待，直到所有的合作线程都到达某一点，然后从该点继续执行；
+屏障（barrier）是用户协调多个线程并行执行工作的同步机制；屏障允许每个线程等待，直到所有的合作线程都到达某一点，然后从该点继续执行；类型为`pthread_barrier_t`
 
 - 初始化和销毁
 
   ```c
   int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
+  int pthread_barrier_destroy(pthread_barrier_t *barrier);
   ```
+
+  - `count` 用于指定必须到达屏障的线程数目；
+
+- ```c
+  int pthread_barrier_wait(pthread_barrier_t *barrier);    		//成功返回0，
+  ```
+
+  - 调用线程会在屏障计数未满足的情况下休眠；
+  - 如果满足了屏障计数，多有线程都被唤醒；最后的线程返回`PTHREAD_BARRIER_SERIAL_THEEAD`
+
+### 3.线程控制
+
+
 
 ## 四.Socket
 
@@ -656,19 +740,24 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   - 异步I/O：进程告诉内核，当描述符准备好可以I/O时，用一个信号通知该进程；问题：根据信号无法区分是哪个具体的描述符准备好了；
   - I/O 多路转接：首先构造一个感兴趣的描述符表，然后调用一个函数，直到描述符中的一个已经准备好进行I/O；该函数才返回；
 
-- select：
-
-  ```c
+- ```c
   int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
-  // nfds: 三个文件描述符集合中最大的文件描述符 + 1；
-  // fd_set: 一个特殊结构体，通过 以下宏操作
-  //         FD_ZERO(&set); 将set清零
-  //         FD_SET(fd, &set); 将set清零
-  //         FD_CL(fd, &set); 将set清零
-  //		   FD_ISSET(fd, &set); 判断fd是否是set成员
-  // timeout: 最多等待时间，==NULL 捕捉不到信号，无限等待；==0；不等待立刻返回；
-  // 返回：准备就绪的文件描述符数目，超时返回0，出错返回-1；用法：当返回值>0时，
   ```
+
+  - nfds: 三个文件描述符集合中最大的文件描述符 + 1；
+
+  - fd_set: 一个特殊结构体，通过 以下宏操作
+
+    ```c
+    FD_ZERO(&set); 			//将set清零
+    FD_SET(fd, &set); 		//将set清零
+    FD_CL(fd, &set); 		//将set清零
+    FD_ISSET(fd, &set); 	//判断fd是否是set成员
+    ```
+
+  - timeout: 最多等待时间，==NULL 捕捉不到信号，无限等待；== 0,不等待立刻返回；
+
+  - 返回：准备就绪的文件描述符数目，超时返回0，出错返回-1；用法：当返回值>0时，
 
 - poll：目前已被epoll取代,
 
