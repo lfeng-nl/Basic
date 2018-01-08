@@ -402,13 +402,10 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   ```c
   int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
   struct sigaction {
-  	void     (*sa_handler)(int);   // 信号处理函数
-  	void     (*sa_sigaction)(int, siginfo_t *, void *);  // 另一个信号处理函数
+  	void     (*sa_handler)(int);   	// 信号处理函数
   	sigset_t   sa_mask;				// 在信号处理期间需要屏蔽的信号
   	int        sa_flags;			// 指定信号处理行为，可以按位或组合
-  	void     (*sa_restorer)(void);	// 目前废弃
   };
-
   /* demo */
   static void sig_usr(int signum)
   {
@@ -759,6 +756,53 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 - 使用`ssize_t pread(int fd, void *buf, size_t count, off_t offset)`, 原子性偏移，读取文件内容；
 
 ## 四.Socket
+
+socket是通信端点的抽象，正如使用文件描述符访问文件，应用程序用socket描述访问socket。客户端跟服务端略有不同，伪代码如下：
+
+```c
+//客户端
+clientfd = socket(....);
+connect(clienfd, 服务器ip，port...);
+send(clientfd, 数据)；
+reveive（cliendfd, ....);
+close(clientfd);
+
+//服务端
+listenfd = socket(......);
+bind(listenfd, 本机ip和知名端口80，....);
+listen(listenfd, ....);
+while(ture){
+  connfd = accept(listenfd, ....);
+  reveive(connfd, ....);
+  send(connfd, .....);
+}
+```
+
+- ```c
+  int socket(int domain, int type, int protocol);  //成功返回套接字描述符，出错返回-1
+  ```
+
+  - `domain` ：确定通信的特性，`AF_INET` IPv4因特网域，`AF_INET6` IPv6因特网域，`AF_UNIX` UNIX域，`AF_UPSPEC` 未指定；
+  - `type` ：确定socket的类型，进一步确定通信特征；
+  - `protocol` ：通常是0，表示给定的域和套接字类型选择默认协议；
+  - `socket()` ：与`open()`类似
+
+- ```c
+  int shutdown(int sockfd, int how);			//成功返回0，失败返回-1
+  ```
+
+  - `how` ：`SHUT_RD`,关闭读端，`SHUT_WR`,关闭写端；
+
+- TCP/IP协议栈使用大端字节序；
+
+- 有以下方式用于字节序的转换：
+
+  ```c
+  uint32_t htonl(uint32_t hostlint32);
+  uint32_t htons(uint16_t hostint16);
+  uint32_t ntohl(uint32_t netint32);
+  uint16_t ntohs(uint16_t netint16);
+  ```
 
 ## 五.高级IO
 
