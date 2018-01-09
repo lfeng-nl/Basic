@@ -552,7 +552,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
 
   - 线程的分离
 
-    默认情况，线程的终止状态会一直保存直到对该线程调用`pthread_join()`；或用`pthread_detach()`对线程分离，分离后，线程的资源可以在线程终止时立刻被回收；分离后的线程不能在被`pthread_join()`;
+    默认情况，线程的终止状态会一直保存直到对该线程调用`pthread_join()`；或用`pthread_detach()`对线程分离，分离后，线程的资源可以在线程终止时立刻被回收，而不必在返回到主线程中；分离后的线程不能在被`pthread_join()`;线程必须被分离，或用`pthread_join`获得进程的返回信息；
 
     ```c
     int pthread_detach(pthread_t tid);
@@ -733,13 +733,55 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   - 调用线程会在屏障计数未满足的情况下休眠；
   - 如果满足了屏障计数，多有线程都被唤醒；最后的线程返回`PTHREAD_BARRIER_SERIAL_THEEAD`
 
-### 3.线程控制
+#### g.信号量
 
-指同步对象的属性，例如互斥量，读写锁，条件变量等；
+信号量有两种：XSI 信号量，POSIX 信号量；前者主要用于进程间通信，后者用于线程同步；
+
+- POSIX信号量有两种形式：命名的和未命名的，差异在于创建和销毁形式上；
+
+- **未命名信号量**：只能在同一个进程中使用，用于线程间同步；
+
+- ```c
+  int sem_init(sem_t *sem, int pshared, unsigned int value);		// 成功返回0，出错返回-1
+  ```
+
+  - `pshared` ：表明是否在多个进程中使用信号量；
+  - `value`：指定了信号量的初始值；
+
+- ```c
+  int sem_destroy(sem_t *sem);		//销毁，成功为0，失败返回-1；
+  ```
+
+- ```c
+  int sem_getvalue(sem_t *sem, int *valp);	// 检索信号量值
+  ```
+
+  - `valp` ：指向的整数值将包含信号量值，注意：试图读取信号量时，值可能已经改变，需要加锁来避免这种情况；
+
+- **命名的信号量**：可以通过名字访问，可以跨进程；
+
+### 3.线程控制
 
 #### a.线程属性
 
-#### b.同步属性
+- 脱离线程：线程退出时直接终止，没有返回到主线程中的必要；可以通过1.调用`pthread_detach()`,2.修改线程属性；
+
+- 修改线程属性流程：`pthread_attr_t thread_attr --> phtread_attr_init() -->pthread_attr_set.... --> pthread_create(.,&thread_attr, ...)` 
+
+- ```c
+  int pthread_attr_init(pthread_attr_t *attr);		// 成功返回0， 失败返回错误码
+  ```
+
+  - 初始化一个线程属性对象
+
+- 有很多的函数可以设置不同的属性行为，例如
+
+  ```c
+  int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
+  int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate);
+  ```
+
+  - `detachstate`  ：可以用到的两个标志分别为`PTHREAS_CREATE_JOINABLE` ,默认属性，允许线程合并， `PTHREAD_CREATE_DETACHED` ，分离线程，不能通过`join`获得另一个线程的退出状态。
 
 #### c.重入
 
