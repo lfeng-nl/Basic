@@ -325,7 +325,7 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   ```
 
   - `addr`：指定共享内存连接到当前进程中的地址位置；通常是一个==空指针==，表示让系统来选择地址；
-  - `flag` ：位标志，
+  - `flag` ：位标志，一般为0；
 
 - ```c
   int shmdt(const void *addr);					// 将共享内存从当前进程中分离
@@ -338,7 +338,16 @@ XSI IPC 包括：消息队列，信号量，及共享内存；
   ```
 
   - `shmid` ：共享内存的标识符；
-  - `cmd`：可以为`IPC_STAT` 得到共享内存设置放到`buf`中, `ICP_SET` 将共享内存设置为给定值, `IPC_RMID`, 删除共享段内存；
+
+  - `cmd`：可以为`IPC_STAT` 读取`shmid_ds` 值,  `ICP_SET` 设定值, `IPC_RMID`, 删除共享段内存；
+
+    ```c
+    sturct shmid_ds{
+      uid_t shm_perm.uid;
+      uid_t shm_perm.gid;
+      mode_t shm_perm.mode;
+    }
+    ```
 
 #### g.消息队列
 
