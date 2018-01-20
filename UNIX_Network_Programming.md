@@ -202,3 +202,10 @@ int recv(int sockfd, void *buf, int len, int flags);
 
 查看已经使用端口号：`/etc/services`
 
+### 8.close()
+释放套接字；
+### 9.其他
+```c
+int getpeername(int sockfd, struct sockaddr *addr, int *addrlen);
+int gethostname(char *hostname, size_t size);
+```
