@@ -45,9 +45,17 @@
       	struct in6_addr sin_addr;				//	IPV6 address
       	uint32_t 		sin6_scope_id;			// 
     }
-    ```
-### 3.地址转换函数
+    ```
+### 3.sockaddr_storage
 
+```c
+struct sockaddr_storage {
+    u_char sa_len;
+    u_char sa_family;
+    u_char padding[128];
+}; 
+```
+### 4.地址转换函数
 - ```c
   int inet_aton(const char *strptr, struct in_addr *addrptr);   // 将点分字符串转为 in_addr
   in_addr_t 	inet_addr(const char *strptr);					  // 同上
@@ -57,8 +65,8 @@
   ```
 
   - `family`：`AF_INET; AF_INET6`
-  - ​
-### 4.字节排序函数
+  - 
+### 5.字节排序函数
 
 -   大端：高尾端，尾部在高地址；
 
@@ -73,7 +81,7 @@
     uint32_t ntohl(uint32_t net16bitvalue);		// h表示host，n代表network，s表示short，l表示long
     ```
 
-### 5.字符操作函数
+### 6.字符操作函数
 
 - ```c
   void *memset(void *dest, int c, size_t len);
@@ -81,7 +89,7 @@
   ```
 
 
-### 6.从IPv4转到IPv6
+### 7.从IPv4转到IPv6
 
 -   1.尝试使用`getaddrinfo()`获取所有`struct sockaddr`信息，而不是手动打包；
 -   2.编码中所有跟IP版本相关的用函数包装；
