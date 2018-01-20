@@ -145,15 +145,60 @@ struct sockaddr_storage {
     -   返回`socket`的描述符；失败返回-1；
 
 ### 3.bind()
+将套接字绑定到本机一个端口号上（服务端需要此步骤）；
 
--   ```c
+-  ```c
     int bind(int sockfd, struct sockaddr *my_addr, int addrlen);
     ```
 
     -   `sockfd`：socket描述符号；
-    -   `my_addr` ：用于记录地址信息；协议族、IP地址、端口号；
-    -   `addrlen`：地址长度；
+    -   `my_addr` ：用于记录自己的地址信息；协议族、IP地址、端口号；一般需要强制类型转化为`(struct sockaddr *);`
+    -   `addrlen`：地址长度，sizeof(my_addr)；
+    -  推荐使用`getaddrinfo()`获取地址相关信息，
+    -  `bind()`已经使用的地址和端口号会失败，失败返回-1；可以使用`setsockopt()`
 
+### 4.connect()
+
+-  ```c
+    int connect(int sockfd, struct sockaddr * serv_addr, int addrlen);
+    ```
+    
+    -  `sockfd` ：上面创建的`sockfd`；
+    -  `serv_addr` ：是包含目标端口和目标服务器的IP地址；一般需要强制类型转换为`struct sockaddr *` ；
+    -  `addrlen` ：服务器地址结构的字节长度；
+    -  地址和地址长度一般可以通过`getaddrinfo()`获得；
+    -  失败返回-1；
+  
+### 5.linten()
+监听特定的端口；
+  - ```c
+       int listem(int sockfd, int backlog);
+    ```
+    - `backlog` ： 允许连接的数目；
+    - 调用`listen()`之前，需要调用`bind()`绑定特定端口号；
+    - 失败返回-1；
+
+### 6.accept()
+接受相应的连接，并返回一个全新的套接字文件描述符；
+- ```c
+    int accept(int sockfd, sturct sockaddr * addr, socklen_t *addrlen);
+   ```
+
+    - `sockfd`：上面创建，并监听的socket文件； 
+    - `addr` ：通常是一个本地`struct sockaddr_storage`指针，用于存放客户端地址信息；
+    - `addrlen` ：指向本地`socklen_t`变量，应该先置为`sizeof(sockaddr_storage)`, 存放返回的地址长度;
+    
+### 7send()和recv()
+用于面向连接的数据流套接字，如果使用面向非连接的数据报套接字，可以使用`sendto()与 recvfrom()` ;
+- ```c
+int send(int sockfd, const void *msg, int len, int flags);
+int recv(int sockfd, void *buf, int len, int flags);
+```
+- `sockfd` ：可以是`socket()`(客户端)返回的；或是`accept()`（服务端）返回的；
+- `msg`/ `buf`：缓冲区地址；
+- `len` ：以字节为单位的数据长度；需要发送的数据长度/可以接受的数据长度；
+- `flags` ：通常置为0；
+- 返回值：`recv()`返回接受到的字符长度，收到0意味着远程服务已经关闭了连接；-1为失败；`send()`返回实际发送的字节数，错误返回-1；
 
 查看已经使用端口号：`/etc/services`
 
