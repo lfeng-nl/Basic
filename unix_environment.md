@@ -857,7 +857,7 @@ while(ture){
 
 ## 五.高级IO
 
-包括：非阻塞I/O，记录锁，I/O多路转接(`select` 和 `poll` 函数)、异步I/O，`readv` 和 `writev` 函数以及存储映射 I/O(mmap)；
+包括：非阻塞I/O，记录锁，I/O多路复用(`select` 和 `poll` 函数)、异步I/O，`readv` 和 `writev` 函数以及存储映射 I/O(mmap)；
 
 - 一些概念：
 
@@ -873,45 +873,20 @@ while(ture){
 
 ### 1.非阻塞I/O
 
-- 系统调用分两类：低速系统调用、其他系统调用；低速系统调用是可能会使进程永远阻塞的一类系统调用；注意：是永远阻塞！所以，磁盘类文件I/O 不可能永远阻塞，不是低速系统调用；
+- 非阻塞IO: 发出`read, open, write `等操作时, 并不会永远阻塞, 而是立刻出错返回;
 - 指定非阻塞I/O 的方式有：
   - `open()` 时 ，指定 `O_NONBLOCK` 标志；
   - 对已经打开的，调用`fcntl(int fd, int cmd, ...)` 修改，`fcntl(fd, F_SETFL, O_NONBLOCK)`
 
-### 2.记录锁 record locking
+### 2.I/O 多路复用, I/O multiplexing
 
-功能：当一个进程正在读写或修改文件的某个部分时，使用记录锁可以阻止其他进程修改同一文件区；
+- 多路复用：内核一旦发现进程指定的一个或者多个IO条件满足读/写条件，就通知该进程进行相关操作;
+  - 一般需要的参数为关注的文件, 超时时间;
+- 通过`select(), poll(), epoll()`能够实现多路复用；
+  - `select() 同 poll()` 类似, 返回准备好的描述符数量, 需要后续遍历去处理; 两者参数略有不同.
+  - `epoll()`, 
 
-- ```c
-  int fcntl(int fd, int cmd, ...); 			// 成功，返回值依赖cmd，失败返回-1
-  ```
-
-  - 对于记录锁，cmd是：`F_GETLK, F_SETLK, F_SETLKW`
-
-  - 第三个参数为`struct flock`
-
-    ```c
-    struct flock
-    {
-      short l_type;				// 锁类型，F_RDLCK（共享锁）F_WRLCK（独占锁）, F_UNLCK(解锁）
-      short l_whence;			// SEEK_SET, SEEK_CUR, SEEK_END
-      off_t l_start;			// 要加锁的起始偏移量，相对l_whence 的偏移量，bytes；
-      off_t l_len;				// length, 锁的长度，0 意味着锁到 EOF
-      pid_t l_pid;				// returned with F_GETLK
-    }
-    ```
-
-### 3.I/O 多路转接
-
-- 什么事多路转接：存在这样一种情况，当同时读取两个描述符时会遇到问题：当一个文件阻塞时就无法对另一个文件操作；解决思路有：
-
-  - 两个进程分别处理，比较复杂；
-  - 使用一个进程，但使用非阻塞I/O;轮寻，
-  - 异步I/O：进程告诉内核，当描述符准备好可以I/O时，用一个信号通知该进程；问题：根据信号无法区分是哪个具体的描述符准备好了；
-  - ==I/O 多路转接==：首先构造一个感兴趣的描述符表，然后调用一个函数，直到描述符中的一个已经准备好进行I/O；该函数才返回；
-- `poll(),pselect(),select()`能够实现多路转接；
-
-#### select()
+#### a. select()
 
 - ```c
   int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);								//准备就绪的描述符数目，超时返回0，失败-1
@@ -919,66 +894,31 @@ while(ture){
 
   - `nfds`: 三个文件描述符集合中最大的文件描述符 + 1；
 
-  - `fd_set`: 文件描述符集合，`rxx,wxx,exxx`分别检测是否有可读，可写，文件异常的文件；通过 以下宏操作
+  - `fd_set`: 文件描述符集合，`rxx,wxx,exxx`分别检测是否有可读，可写，文件异常的文件；
 
-    ```c
-    FD_ZERO(&set); 			//将set清零
-    FD_SET(fd, &set); 		//将fd放入集合
-    FD_CLR(fd, &set); 		//将fd从集合中清除
-    FD_ISSET(fd, &set); 	//判断fd是否是set成员
-    ```
-
-  - timeout: 最多等待时间（相对时间），以秒和微秒组成；
-
-    - 1.`timeout==NULL`  捕捉不到信号，无限等待；
-    - 2.`timeout==0`,不等待立刻返回；
-    - 3.有具体的数值；
-
-    ```c
-    struct timeval
-    {
-      	__time_t tv_sec;			// seconds
-      	__suseconds_t tv_usec;		// Microseconds
-    }
-    ```
+  - timeout: 最多等待时间;
 
   - 返回：准备就绪的文件描述符数目，超时返回0，出错返回-1；用法：当返回值>0时，然后挨个查询文件描述符是否有文件可以处理；
 
-- ```c
-  int pselect (int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask);	//准备就绪的描述符数目，超时返回0，失败-1
-  ```
 
-  - 为`select()`的变体；
-  - 超时时间用`struct timespec`，以秒和纳秒表示超时；
-  - 可选信号屏蔽字；
-
-#### poll()
-
-- poll：目前已被epoll取代,
+#### b. poll()
 
 - ```c
   int poll(struct pollfd *fds, nfds_t nfds, int timeout);
   ```
 
-  - `poll()`并不为每个条件构造一个描述符集，而是一个`struct pollfd` 数组；
-
-    ```c
-    struct pollfd{
-     	int fd;					// 需要检查的文件描述符
-    	short events;			// 感兴趣的事件
-     	short revents;			// 已经发生的事件
-    }
-    ```
-
-  - `events` 和 `revents` 通过对代表各种事件的标志进行逻辑或运算构成，如（POLLOUT：普通数据可读，POLLWRNORM：普通数据可写）；值可参考 `<poll.h>` 中的定义：
+  - `poll()`并不为每个条件构造一个描述符集，而是通过一个`struct pollfd` 数组, 表示一些感兴趣的文件及事件；
 
   - `nfds`：fds数组的元素数；
 
   - `timeout`：用毫秒表示的时间；-1；永远不会超时；
 
-#### epoll()
+#### c. epoll
 
-- `select()`存在一些不足：单个进程打开的fd数量有限，为`FD_SETSIZE`；`select`每次调用都会线性扫描全部集合，导致`fd`数量多时处理能力下降。
+- `select()和poll()`存在一些不足：
+
+  - 单个进程打开的fd数量有限，为`FD_SETSIZE`；
+  - 每次调用都会线性扫描全部集合，导致`fd`数量多时处理能力下降。
 
 - `epoll`支持的上限为最大可打开文件数目；`epoll`只会对活跃的`socket`进行操作；
 
@@ -997,52 +937,24 @@ while(ture){
 
     - 事件注册函数，不同于`select`，epoll要注册监听的事件类型，；
 
-    - `epfd` ：创建的`epoll`句柄；
+    - `epfd` ：`epoll`的句柄；
 
-    - `op` ：动作，用三个宏表示：
-
-      - `EPOLL_CTL_ADD` : 注册一个新的`fd`到`epoll`
-      - `EPOLL_CTL_MOD` : 修改已经注册的`fd`的监听事件
-      - `EPOLL_CTL_DEL` : 删除`fd`
+    - `op` ：动作, 新加, 修改, 删除;
 
     - `fd` ：需要操作的文件的文件描述符；
 
     - `event` ： 内核需要的监听事件
-
-      ```c
-      struct epoll_event{
-        uint32_t events;			// epoll 事件
-        epoll_data_t data;		// 
-      }
-
-      typedef union epoll_data{
-        void *ptr;
-        int fd;
-        uint32_t u32;
-        uiint64_t u64;
-      }epoll_data_t;
-
-      // events
-      EPOLLIN			// 表示对应文件描述符可以读
-      EPOLLOUT		// 文件描述符可以写
-      EPOLLPRI		// 对应的文件描述符有紧急数据可读
-      EPOLLERR		// 对应文件描述符发生错误
-      EPOLLHUP		// 表示对应的文件描述符被挂断
-      EPOLLET			// 将epoll设为边缘触发ET模式，相对水平触发LT来说
-      EPOLLONESHOT	// 只监听一次，监听完后会把fd从这个epoll队列中删除；
-      ```
 
   - ```c
     int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
     ```
 
     - 等待事件产生，返回需要处理的事件数量；并将需要处理事件的`fd`集合于参数`events`内；
-    - `epfd`：`epoll`的文件描述符号；
-    - `events` ：用来存放从内核得到的事件信息；
+    - `epfd`：`epoll`的句柄；
+    - `events` ：用来存放从内核得到的事件信息, 包含需要处理的文件描述符；
     - `maxevents` ：告诉内核`events`空间有多大；
     - `timeout` ：超时时间（毫秒），0立刻返回；-1，一直阻塞；
 
-  - 使用步骤：`epoll_create` 创建epollfd -- > `epoll_ctl(,EPOLL_CTL_ADD,..)`添加`fd`和事件到`epollfd` --> `epoll_wait()` --> 根据返回的值和`events`中的信息（fd，和事件类型）作相应处理 --> 处理过程中需要修改事件的fd `epoll_ctl(,EPOLL_CTL_MOD,..)` 例如：读要换成写；
 
 
 ### 4.异步I/O
