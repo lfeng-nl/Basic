@@ -900,7 +900,9 @@ while(ture){
   - timeout: 最多等待时间;
 - 返回：准备就绪的文件描述符数目，超时返回0，出错返回-1；用法：当返回值>0时，然后挨个查询文件描述符是否有文件可以处理；
   
-  - 限制: 1.最大打开文件限制, 2.`fd_set`数组长度限制`__FD_SETSIZE`, 源码固定, 更改需要改内核源码重新编译(poll/epoll无此限制);
+  - **限制: **
+    - **1.最大打开文件限制, **
+    - **2.`fd_set`数组长度限制`__FD_SETSIZE`, 源码固定, 更改需要改内核源码重新编译(poll/epoll无此限制)**;
 
 
 #### b. poll()
@@ -984,6 +986,11 @@ while(ture){
 
 
 ## 6.其他
+
+- 资源限制: [参考](https://learn-linux.readthedocs.io/zh_CN/latest/administration/kernel/rlimit.html)
+
+  - 命令: `ulimit -a`;
+  - 文件: `/etc/securitylimits.conf`;
 
 - 大小端：例如数 0x11 22 33 44
 
