@@ -810,7 +810,9 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
 
 ## 四.Socket
 
-socket是通信端点的抽象，正如使用文件描述符访问文件，应用程序用socket描述访问socket。客户端跟服务端略有不同，伪代码如下：
+> `socket()`创建描述符, `connect()` 连接服务器, 如果非阻塞, 失败返回-1; `accept()`: 接受客户端连接, 返回一个新的描述符, 新描述符用于同连接的客户端通信, 原始的描述符继续保持可用状态, 并接受其他连接请求,  如果非阻塞, 无连接发生返回-1;
+>
+> 使用`poll`或`select`来处理`accept()`: 当有连接请求时, 描述符表现为可读;
 
 ```c
 //客户端
@@ -825,7 +827,7 @@ listenfd = socket(......);
 bind(listenfd, 本机ip和知名端口80，....);
 listen(listenfd, ....);
 while(ture){
-  connfd = accept(listenfd, ....);
+  connfd = accept(listenfd, ....); 
   reveive(connfd, ....);
   send(connfd, .....);
 }
@@ -840,28 +842,12 @@ while(ture){
   - `protocol` ：通常是0，表示给定的域和套接字类型选择默认协议；
   - `socket()` ：与`open()`类似
 
-- ```c
-  int shutdown(int sockfd, int how);			//成功返回0，失败返回-1
-  ```
-
-  - `how` ：`SHUT_RD`,关闭读端，`SHUT_WR`,关闭写端；
+- 
 
 - TCP/IP协议栈使用大端字节序；
 
-- 有以下方式用于字节序的转换：
 
-  ```c
-  uint32_t htonl(uint32_t hostlint32);
-  uint32_t htons(uint16_t hostint16);
-  uint32_t ntohl(uint32_t netint32);
-  uint16_t ntohs(uint16_t netint16);
-  ```
-
-## 五.高级IO
-
-包括：非阻塞I/O，记录锁，I/O多路复用(`select` 和 `poll` 函数)、异步I/O，`readv` 和 `writev` 函数以及存储映射 I/O(mmap)；
-
-- 一些概念：
+## 五.高级I/O
 
 > ==同步(synchronize)==：调用者主动等待 调用 的结果；
 >
@@ -871,7 +857,17 @@ while(ture){
 >
 > ==非阻塞(Non-block)==：在调用结果返回之前，当前线程不会被阻塞挂起；
 >
+> **同步阻塞I/O**: 最常见的模型;
+>
+> **同步非阻塞I/O**: 设备已非阻塞方式打开, 程序读写失败延时继续尝试;
+>
+> **异步阻塞I/O**: 使用多路复用实现异步, 然后阻塞读写;
+>
+> **异步非阻塞I/O**: `aio`, 
+>
 > 标准输入，输出，错误输出的文件描述符：`STDIN_FILENO, STDOUT_FILENO,STDERR_FILENO`;
+>
+> [参考]( https://www.ibm.com/developerworks/cn/linux/l-async/index.html )
 
 ### 1.非阻塞I/O
 
@@ -957,6 +953,24 @@ while(ture){
     - `events` ：用来存放从内核得到的事件信息, 包含需要处理的文件描述符；
     - `maxevents` ：告诉内核`events`空间有多大；
     - `timeout` ：超时时间（毫秒），0立刻返回；-1，一直阻塞；
+
+### 3. Proactor 和 Reactor
+
+> I/O多路复用机制需要事件分发器(event dispatcher) 事件分发器就是将读写事件源分发给各个读写事件的处理者;
+
+- Reactor: 事件分发器等待文件可读写, 就将事件传递给响应的处理函数或回调函数, 由后者来做实际的读写查找;
+  - 步骤1：等待事件到来（Reactor负责）。
+  - 步骤2：将读就绪事件分发给用户定义的处理器（Reactor负责）。
+  - 步骤3：读数据（用户处理器负责）。
+  - 步骤4：处理数据（用户处理器负责）。
+- Proactor: 事件分发器或事件分发器直接发起一个异步读写操作, 实际工作由操作系统来完成, 提供缓冲区, 以及完成回调;
+  - 步骤1：等待事件到来（Proactor负责）。
+  - 步骤2：得到读就绪事件，执行读数据（现在由Proactor负责）。
+  - 步骤3：将读完成事件分发给用户处理器（Proactor负责）。
+  - 步骤4：处理数据（用户处理器负责）。
+
+- 不同点:
+  - 当通知用户处理时, `Reactor`模式表示I/O可读写, `Proactor`模式表示I/O操作已完成.
 
 ### 4.异步I/O
 
