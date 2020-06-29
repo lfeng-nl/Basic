@@ -194,7 +194,11 @@
 
 #### a.管道
 
-- 局限性：1.半双工，数据只能在一个方向流动；2.一般使用方式：创建管道，fork，子进程和父进程之间就可以使用管道通信；
+![pipe](./image/pipe.png)
+
+- 半双工，数据只能在一个方向流动；
+
+- 般使用方式：创建管道，fork，子进程和父进程之间就可以使用管道通信；
 
   ```c
   int pipe(int fd[2]);				// fd[0]为读而打开，fd[1]为写打开，需要用底层读写
@@ -215,7 +219,7 @@
 
 - 只有父、子进程把针对管道的所有写描述符都关闭，管道才会被认为是关闭了，对管道的`read`调用才会失败；
 
-#### b.FIFO
+#### b.命名管道
 
 > 一个特殊的文件，文件类型为`p`,也称命名管道，普通的管道使用上局限于同祖先进程，而FIFO，不相关进程也能通信；
 
@@ -236,6 +240,21 @@ int mkfifoat(int fd, const char *pathname, mode_t node);
 - FIFO信息不交错条件：每个写请求是发往一个阻塞FIFO的，并且每个写请求的数据长度小于等于一个`PIPE_BUF`;
 
   > pipe 和FIFO 用于实现进程间相互发送非常短小的，频率很高的消息，适用于两个进程间的通信；
+
+#### c.UNIX域套接字
+
+> 用于同一台计算机上运行的进程之间的通信, 不执行协议处理, 不需要添加或删除网络报头, 无需计算校验和, 不要产生序号, 无需发送确认报文. 类似一个全双工的管道.
+>
+> ![socketpair](./image/socketpair.jpg)
+
+```python
+int socketpair(int domain, int type, int protocol, int sockfd[2]);
+// domain = AF_UNIX
+// type = SOCK_STREAM
+// protocol = 0
+```
+
+
 
 #### c.XSI IPC
 
