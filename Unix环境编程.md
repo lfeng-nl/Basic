@@ -1,4 +1,4 @@
-
+# UNIX环境编程
 
 > cpu工作原理,自动取址执行-->管理cpu就是设置PC值-->多道程序，交替执行 --> 并发 -->  如何实现并发？（切换PC、记录返回地址) --> PCB记录信息（切出去时程序执行的上下文：进程标识符、处理机的信息（通用寄存器，指令计数器，PSW，用户的栈指针、进程调度信息（进程状态，进程的优先级...)、进程控制信息（进程同步和通信机制，链接指针...)
 >
@@ -279,6 +279,18 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 ##### 1.信号量 semaphore
 
 > 信号量：一个特殊变量，只允许对它进行等待和发送信号两种操作；
+>
+> 基本功能: 可以**设置, 检查, 或等待**, 直到信号量清除;
+
+- 创建信号量
+
+  ```c
+  /* 创建或得到一个信号量，返回信号量的标识符 semid，失败返回-1 */
+  int semget(key_t key, int nsems, int flag);		
+  ```
+  - `key`：一个整数值，不相关的进程可以通过相同的`key`访问同一个信号量。程序对所有信号量的访问都是间接的，它先提供一个键，再由系统生成一个相应的信号量标识符；**任何进程只要key值相同，都能拿到同一个信号量的标识符**
+  - `nesms`：用于指定需要的信号量数目，几乎总是1；
+  - `flag` ：通过使用`IPC_CREAT|IPC_EXCL` 来确保创建出一个新的、唯一的信号量；
 
 - 为获取共享资源，进程需要执行以下操作：
 
@@ -288,14 +300,6 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
   - 当进程不在使用时，信号量减1；
 
 - 信号的初值：表明有多少共享资源单位可以供使用；
-
-- ```c
-  int semget(key_t key, int nsems, int flag);		// 创建或得到一个信号量，返回标识符，失败返回-1
-  ```
-
-  - `key`：一个整数值，不相关的进程可以通过它访问同一个信号量。程序对所有信号量的访问都是间接的，它先提供一个键，再由系统生成一个相应的信号量标识符；==任何进程只要key值相同，都能拿到同一个信号量的标识符==
-  - `nesms`：用于指定需要的信号量数目，几乎总是1；
-  - `flag` ：通过使用`IPC_CREAT|IPC_EXCL` 来确保创建出一个新的、唯一的信号量；
 
 - ```c
   int semop(int semid, struct sembuf *sops, size_t nops);   //用于改变信号量的值
@@ -390,10 +394,6 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 - ```c
   ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
   ```
-
-#### d.POSIX信号量
-
-> 解决了XSI信号量的若干问题
 
 ### 4.守护进程
 
