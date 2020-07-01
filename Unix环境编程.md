@@ -256,31 +256,19 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 
 
 
-#### c.XSI IPC
+#### c.System V IPC & POSIX IPC
 
-`XSI IPC` 包括：消息队列，信号量，及共享内存；
-
-- `IPC`标示符：非负整数, 用于标示内核中的IPC结构，对外与一个键（key）相关联；
-
-- `键（key）`：做为IPC对象的外部名；类型为`key_t`;
-
-- 特点：IPC结构体在系统范围起作用，没有引用计数；在文件系统中没有名字；
-
-  > 共享内存用于实现进程间共享的，非常庞大的、读写操作频率很高的数据（配合信号量使用）；多用于多进程间的通信；
-  >
-  > 其他的可以用socket；
-  >
-  > 消息队列，不建议使用；
-  >
-  > 信号量：用于线程调度，所谓的线程调度就是：一些线程生产同时一些线程消费，semaphore可以让生产和消费保持合乎逻辑的执行顺序；
-  >
-  > mutex：用于保护共享资源，服务于共享资源；
+> System V IPC vs POSIX IPC: [参考1](https://stackoverflow.com/questions/4582968/system-v-ipc-vs-posix-ipc), [参考2](http://ranler.github.io/2013/07/01/System-V-and-POSIX-IPC/), 两者都提供**信号量, 共享内存, 消息队列**, 基本概念一致, 但是接口不同, 实现不同;
+>
+> System V IPC, 又称为 XSI  IPC: `msgget(), semget(),  shmget()`
+>
+> POSIX IPC: `mq_open(), sem_open(), shm_open()`
 
 ##### 1.信号量 semaphore
 
-> 信号量：一个特殊变量，只允许对它进行等待和发送信号两种操作；
+> 信号量和文件锁都用于进程之间的共享资源.
 >
-> 基本功能: 可以**设置, 检查, 或等待**, 直到信号量清除;
+> 信号量用于保持在0到指定最大值之间的一个计数值, 完成等待, 计数减一, 释放信号量, 计数加一; 适用于有限用户使用或者资源总量有限(python中的场景.
 
 - 创建信号量
 
@@ -1026,10 +1014,8 @@ while(ture){
 - `int fsync(int fd)`: 只对`fd`文件起作用, 且等待磁盘操作结束才返回, 会将数据和状态都更新;
 - `int fdatasync(int fd)`: 类似`fsync`, 但只影响数据部分;
 
-## 6.守护进程
 
-
-## 6.其他
+## 六.其他
 
 - 资源限制: [参考](https://learn-linux.readthedocs.io/zh_CN/latest/administration/kernel/rlimit.html)
 
@@ -1063,25 +1049,3 @@ while(ture){
   - 内核态：CPU可以访问所有数据，包括外围设备，例如硬盘，网卡，CPU也可以将自己从一个程序切到另一个程序；
   - 用户态：只能受限的访问内存，且不允许访问外围设备，占用CPU的能力可以被剥夺；
   - 32位机器上，内存被分为内核空间和用户空间，
-
-- 常用生疏命令：
-
-  - `top`：系统运行情况，CPU，内存占用；
-
-  - `free` 
-
-  - `netstat` ：网络相关信息；
-
-  - `tcpdump` ：抓包；
-
-  - `sed` ：文本流处理
-
-  - `awk`
-
-  - `grep`
-
-  - `ipcs` ：显示ipc设备，`ipcs -s` 显示系统中的信号量；`ipcs -m`显示共享内存；
-
-  - `ipcrm` ：删除ipc设备；`ipcrm sem id`删除信号量；
-
-    
