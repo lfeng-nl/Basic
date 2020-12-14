@@ -1,26 +1,37 @@
 # UNIX网络编程
 
-![套接字基本使用流程](./image/socket.png)
+## 1.套接字
 
-## 1.基本概念
+- `socket`在内核中的存储
+    - 每个连接后的`socket`在内核中维护了连个队列`sk_write_queue`, `sk_receive_queue`.
 
-## 2.关键流程
+![socket](./image/socket.jpg)
 
-### 2.socket()
+- 创建
+    - `AF_INET/ AF_INET6`: ipv4和ipv6的socket.
+    - `SOCK_STREAM/SOCK_DGRAM`: TCP/UDP socket.
 
-### 3.bind()
+```python
+import socket
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    pass
+```
 
-### 4.connect()
+## 2.TCP协议socket
 
-### 5.listen()
+![TCP](./image/socket_tcp.jpg)
 
-### 6.accept()
+- `bind()`: 给`socket`赋予一个`IP地址`和端口.
+- `listen()`: 服务端进入`listen`状态.
+- **监听socket和连接socket**:
+    - 监听`socket`: 始终在listen的socket. 
+    - 连接socket: `accept()`客户端请求后, 会产生一个新的`socket`, 用于和客户端间的通信.
 
-### 7send()和recv()
+## 3.UDP协议socket
 
-### 8.close()
+- 无连接, 因此不需要`listen, connect`, 服务端仅需要一个`socket`, 就可以和所有的客户端通信.
 
-### 9.其他
+![udp](./image/socket_udp.jpg)
 
 ## 3.套接字选项
 
@@ -52,6 +63,7 @@
     - 可以通过`IPPROTO_TCP`层级调整keepalive的时间间隔和重复检查次数等配置信息.(`TCP_KEEPIDLE: 空闲时间, TCP_KEEPCNT: 重复次数, TCP_KEEPINTVL: 间隔`).
 
 - `IPPROTO_TCP` TCP协议层级选项:
+  
   - `TCP_NODELAY`: 禁用`Nagle`算法.
 
 
@@ -68,3 +80,10 @@
 - 使用`alarm`, 通过捕获信号实现超时处理.
 - 在`select`中阻塞, 利用`select`自身的超时.
 - 使用选项`SO_RCVTIMEO, SO_SNDTIMEO`, 设置接收和发送超时.
+
+## 5.常见问题
+
+### 1.限制
+
+- 文件描述符限制
+- 
