@@ -52,20 +52,21 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 > 不同层级具有不同的选项
 
 - `SOL_SOCKET` socket层级选项:
+  
   - `SO_KEEPALIVE`: 用于开启或者关闭保活探测，默认情况关闭.
+    
     > 与应用层心跳探测的区别?
     >
     > a. TCP keepalive处于传输层，由操作系统负责，能够判断进程存在，网络通畅.
     >
     > b. 但是keepalive只能检测连接是否存活，不能检测连接是否可用.例如服务器因为负载过高导致无法响应请求.
     - 在`/proc/sys/net/ipv4/`下定义了全局默认的keepalive的一些参数.
-    - 在指定时间内, 套接口的任一方向都没有数据交换时, TCP就自动给对方发一个保持存活探测分节(keepalive probe).
+  - 在指定时间内, 套接口的任一方向都没有数据交换时, TCP就自动给对方发一个保持存活探测分节(keepalive probe).
     - 可以通过`IPPROTO_TCP`层级调整keepalive的时间间隔和重复检查次数等配置信息.(`TCP_KEEPIDLE: 空闲时间, TCP_KEEPCNT: 重复次数, TCP_KEEPINTVL: 间隔`).
-
+  
 - `IPPROTO_TCP` TCP协议层级选项:
   
   - `TCP_NODELAY`: 禁用`Nagle`算法.
-
 
 ## 4.超时
 
