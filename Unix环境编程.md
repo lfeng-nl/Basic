@@ -256,7 +256,7 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 
 
 
-#### c.System V IPC & POSIX IPC
+#### d.System V IPC & POSIX IPC
 
 > System V IPC vs POSIX IPC: [参考1](https://stackoverflow.com/questions/4582968/system-v-ipc-vs-posix-ipc), [参考2](http://ranler.github.io/2013/07/01/System-V-and-POSIX-IPC/), 两者都提供**信号量, 共享内存, 消息队列**, 基本概念一致, 但是接口不同, 实现不同;
 >
@@ -321,18 +321,20 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 
 ##### 2.共享内存
 
+> 扩展: `void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset);`
+
 允许多个进程共享一个给定的存储区，数据不需要进程间拷贝，因此是最快的IPC；原理就是同一块物理内存映射到不同进程的各自进程地址空间中；共享段为内存的匿名段；一般还要用信号量同步共享存储访问；
 
 - ```c
-  int shmget(key_t key, size_t size, int shmflg);			// 创建共享内存，返回共享内存表示符
+  int shmget(key_t key, size_t size, int shmflg);			// 创建共享内存，返回共享内存标识符 shmid 
   ```
 
   - `key`：同信号量类似；
   - `size` ：指定需要的共享内存的容量，单位字节；
-  - `shmflg`：`IPC_CREAT`,创建共享内存
+  - `shmflg`：`IPC_CREAT`,创建共享内存. SHM_R, SHM_W
 
 - ```c
-  void *shmat(int shmid, const void *addr, int flag);  //启用共享内存，连接到一个进程地址空间
+  void *shmat(int shmid, const void *addr, int flag);  //启用共享内存，连接本地地址 addr到共享内存
   ```
 
   - `addr`：指定共享内存连接到当前进程中的地址位置；通常是一个==空指针==，表示让系统来选择地址；
@@ -382,6 +384,27 @@ int socketpair(int domain, int type, int protocol, int sockfd[2]);
 - ```c
   ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
   ```
+
+#### d.CAS (compare and swap)
+
+```c
+int cas(long *addr, long old, long new)
+{
+   /* Executes atomically. */
+    if(*addr != old)
+        return 0;
+    *addr = new;
+    return 1;
+}
+```
+
+- **使用**: 会记录下内存中的**旧值**, 通过对旧值操作**得到新值**, 通过**原子的`CAS`操作**(记录旧值和当前一致, 将新值写入, 不一致, 返回.)
+    - 原子`CAS`操作: `__asm__ volatile(汇编)`
+- **ABA问题**: 增加版本号, 每次更新变量时, 版本号+1.
+
+
+
+
 
 ### 4.守护进程
 
