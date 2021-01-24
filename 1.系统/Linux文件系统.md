@@ -114,6 +114,16 @@ struct super_block {
 
   - `i_list`: 存储`inode`数据的链表;
   - `i_sb_list`: 超级块链表;
+  
+- 查看文件的`inode`信息: 
+
+    - `stat file`
+    - `ls -i file`
+
+- 软连接和硬链接
+
+    - 硬链接:`ln source link_name`, 和普通文件一样, 多文件指向同一个`inode`. 相当于文件有多个引用.删除原有文件不影响连接.
+    - 软连接:`ln -s source link_name`, 存放的相当于是另一个文件的路径.
 
 ## 3.目录项 `dentry`
 
